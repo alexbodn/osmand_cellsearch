@@ -68,5 +68,6 @@ dependencies {
     kapt "androidx.room:room-compiler:$room_version"
 
     // Network
+    implementation 'net.osmand:android-aidl-lib:5.3@aar'
     implementation 'com.squareup.okhttp3:okhttp:4.10.0'
 }

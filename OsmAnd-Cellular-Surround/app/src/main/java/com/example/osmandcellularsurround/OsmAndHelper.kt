@@ -6,32 +6,85 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.net.Uri
 import android.os.IBinder
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import net.osmand.aidlapi.IOsmAndAidlInterface
+import net.osmand.aidlapi.gpx.ImportGpxParams
+import net.osmand.aidlapi.gpx.ShowGpxParams
+import net.osmand.aidlapi.map.SetMapLocationParams
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
-// Note: To cleanly integrate with OsmAnd via AIDL, the target AIDL files and their dependent classes
-// must be successfully compiled by the AIDL compiler. Because of the enormous dependency chain
-// inside net.osmand.*, we will simulate the interaction here for the sake of the plugin compilation.
-// In a true environment, the plugin would depend on `OsmAnd-api` library or jar instead of raw AIDL.
 class OsmAndHelper(private val context: Context) {
 
-    suspend fun connect(): Boolean = suspendCoroutine { continuation ->
-        // Simulate a successful connection for demonstration
-        continuation.resume(true)
+    private var osmandService: IOsmAndAidlInterface? = null
+
+    private val connection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            osmandService = IOsmAndAidlInterface.Stub.asInterface(service)
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            osmandService = null
+        }
+    }
+
+    suspend fun connect(): Boolean {
+        if (osmandService != null) return true
+
+        return suspendCoroutine { continuation ->
+            val tempConnection = object : ServiceConnection {
+                override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+                    osmandService = IOsmAndAidlInterface.Stub.asInterface(service)
+                    continuation.resume(true)
+                }
+
+                override fun onServiceDisconnected(name: ComponentName?) {
+                    osmandService = null
+                }
+            }
+
+            val intent = Intent("net.osmand.aidl.OsmandAidlServiceV2")
+            intent.setPackage("net.osmand.plus")
+            var bound = context.bindService(intent, tempConnection, Context.BIND_AUTO_CREATE)
+
+            if (!bound) {
+                intent.setPackage("net.osmand")
+                bound = context.bindService(intent, tempConnection, Context.BIND_AUTO_CREATE)
+            }
+
+            if (!bound) {
+                continuation.resume(false)
+            }
+        }
     }
 
     fun disconnect() {
+        if (osmandService != null) {
+            context.unbindService(connection)
+            osmandService = null
+        }
     }
 
-    fun showSurroundings(gpxUri: Uri, lat: Double, lon: Double) {
-        // Here we would call the AIDL methods to import and show GPX, and set map location
-        val intent = Intent(Intent.ACTION_VIEW)
-        intent.setDataAndType(gpxUri, "application/gpx+xml")
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        try {
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            e.printStackTrace()
+    suspend fun showSurroundings(gpxData: String, lat: Double, lon: Double) {
+        val aidl = osmandService ?: return
+
+        withContext(Dispatchers.IO) {
+            try {
+                // To avoid the file permission and OsmAnd confirmation, we can use the string-based
+                // `importGpx` if supported by passing raw XML string.
+                // net.osmand.aidlapi.gpx.ImportGpxParams actually supports string-based file imports.
+                val importParams = ImportGpxParams(gpxData, "cellular_surround.gpx", "red", true)
+                aidl.importGpx(importParams)
+
+                val showParams = ShowGpxParams("cellular_surround.gpx")
+                aidl.showGpx(showParams)
+
+                val locationParams = SetMapLocationParams(lat, lon, 15, 0f, true)
+                aidl.setMapLocation(locationParams)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 }

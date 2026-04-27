@@ -16,6 +16,7 @@ import com.example.osmandcellularsurround.db.AppDatabase
 import com.example.osmandcellularsurround.api.OpenCellidApi
 import com.example.osmandcellularsurround.api.OpenCellidDownloader
 import kotlinx.coroutines.Dispatchers
+import android.widget.ArrayAdapter
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -30,6 +31,7 @@ class MainActivity : AppCompatActivity() {
 
     private val PREFS_NAME = "OsmAndCellularPrefs"
     private val KEY_API_KEY = "api_key"
+    private val KEY_RADIUS = "scan_radius"
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -53,15 +55,31 @@ class MainActivity : AppCompatActivity() {
         osmandHelper = OsmAndHelper(this)
         dataSyncManager = DataSyncManager(this)
 
-        // Load saved API key
+        // Setup radius spinner
+        ArrayAdapter.createFromResource(
+            this,
+            R.array.radius_options,
+            android.R.layout.simple_spinner_item
+        ).also { adapter ->
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            binding.spinnerRadius.adapter = adapter
+        }
+
+        // Load saved preferences
         val savedKey = sharedPrefs.getString(KEY_API_KEY, "")
         binding.etApiKey.setText(savedKey)
+        val savedRadius = sharedPrefs.getInt(KEY_RADIUS, 0)
+        binding.spinnerRadius.setSelection(savedRadius)
 
         binding.btnSaveApiKey.setOnClickListener {
             val key = binding.etApiKey.text.toString().trim()
+            val radiusPosition = binding.spinnerRadius.selectedItemPosition
             if (key.isNotEmpty()) {
-                sharedPrefs.edit().putString(KEY_API_KEY, key).apply()
-                Toast.makeText(this, "API Key Saved", Toast.LENGTH_SHORT).show()
+                sharedPrefs.edit()
+                    .putString(KEY_API_KEY, key)
+                    .putInt(KEY_RADIUS, radiusPosition)
+                    .apply()
+                Toast.makeText(this, "Preferences Saved", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -120,9 +138,12 @@ class MainActivity : AppCompatActivity() {
                 return@launch
             }
 
-            binding.tvStatus.text = "Status: Finding surrounding towers (20km radius)..."
+            val radiusPosition = sharedPrefs.getInt(KEY_RADIUS, 0)
+            val radiusKm = if (radiusPosition == 1) 20.0 else 4.0
 
-            val boundingBox = GpxGenerator.calculateBoundingBox(mainTower.lat, mainTower.lon)
+            binding.tvStatus.text = "Status: Finding surrounding towers (${radiusKm.toInt()}km radius)..."
+
+            val boundingBox = GpxGenerator.calculateBoundingBox(mainTower.lat, mainTower.lon, radiusKm)
             val minLat = boundingBox[0]
             val maxLat = boundingBox[1]
             val minLon = boundingBox[2]
@@ -133,14 +154,14 @@ class MainActivity : AppCompatActivity() {
 
             binding.tvStatus.text = "Status: Generating GPX track with ${surroundingTowers.size} towers..."
 
-            val gpxUri = GpxGenerator.generateGpx(this@MainActivity, mainTower, surroundingTowers)
+            val gpxData = GpxGenerator.generateGpxString(mainTower, surroundingTowers)
 
             binding.tvStatus.text = "Status: Sending to OsmAnd..."
 
             val connected = osmandHelper.connect()
             if (connected) {
                 withContext(Dispatchers.Main) {
-                    osmandHelper.showSurroundings(gpxUri, mainTower.lat, mainTower.lon)
+                    osmandHelper.showSurroundings(gpxData, mainTower.lat, mainTower.lon)
                     binding.tvStatus.text = "Status: Done. Check OsmAnd."
                 }
             } else {
