@@ -18,19 +18,12 @@ import kotlin.coroutines.suspendCoroutine
 class OsmAndHelper(private val context: Context) {
 
     private var osmandService: IOsmAndAidlInterface? = null
+    private var isBound = false
 
-    private val connection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            osmandService = IOsmAndAidlInterface.Stub.asInterface(service)
-        }
-
-        override fun onServiceDisconnected(name: ComponentName?) {
-            osmandService = null
-        }
-    }
+    private var connection: ServiceConnection? = null
 
     suspend fun connect(): Boolean {
-        if (osmandService != null) return true
+        if (osmandService != null && isBound) return true
 
         return suspendCoroutine { continuation ->
             val tempConnection = object : ServiceConnection {
@@ -41,32 +34,40 @@ class OsmAndHelper(private val context: Context) {
 
                 override fun onServiceDisconnected(name: ComponentName?) {
                     osmandService = null
+                    isBound = false
                 }
             }
+            connection = tempConnection
 
             val intent = Intent("net.osmand.aidl.OsmandAidlServiceV2")
             intent.setPackage("net.osmand.plus")
-            var bound = context.bindService(intent, tempConnection, Context.BIND_AUTO_CREATE)
+            isBound = context.bindService(intent, tempConnection, Context.BIND_AUTO_CREATE)
 
-            if (!bound) {
+            if (!isBound) {
                 intent.setPackage("net.osmand")
-                bound = context.bindService(intent, tempConnection, Context.BIND_AUTO_CREATE)
+                isBound = context.bindService(intent, tempConnection, Context.BIND_AUTO_CREATE)
             }
 
-            if (!bound) {
+            if (!isBound) {
                 continuation.resume(false)
             }
         }
     }
 
     fun disconnect() {
-        if (osmandService != null) {
-            context.unbindService(connection)
-            osmandService = null
+        if (isBound && connection != null) {
+            try {
+                context.unbindService(connection!!)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            isBound = false
         }
+        osmandService = null
+        connection = null
     }
 
-    suspend fun showSurroundings(gpxUri: Uri, lat: Double, lon: Double) {
+    suspend fun showSurroundings(gpxUri: Uri, gpxData: String, lat: Double, lon: Double) {
         val aidl = osmandService ?: return
 
         withContext(Dispatchers.IO) {
@@ -83,6 +84,13 @@ class OsmAndHelper(private val context: Context) {
 
                 val locationParams = SetMapLocationParams(lat, lon, 15, 0f, true)
                 aidl.setMapLocation(locationParams)
+
+                val packageManager = context.packageManager
+                val launchIntent = packageManager.getLaunchIntentForPackage("net.osmand.plus")
+                    ?: packageManager.getLaunchIntentForPackage("net.osmand")
+                if (launchIntent != null) {
+                    context.startActivity(launchIntent)
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
