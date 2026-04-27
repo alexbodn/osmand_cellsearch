@@ -66,15 +66,16 @@ class OsmAndHelper(private val context: Context) {
         }
     }
 
-    suspend fun showSurroundings(gpxData: String, lat: Double, lon: Double) {
+    suspend fun showSurroundings(gpxUri: Uri, lat: Double, lon: Double) {
         val aidl = osmandService ?: return
 
         withContext(Dispatchers.IO) {
             try {
-                // To avoid the file permission and OsmAnd confirmation, we can use the string-based
-                // `importGpx` if supported by passing raw XML string.
-                // net.osmand.aidlapi.gpx.ImportGpxParams actually supports string-based file imports.
-                val importParams = ImportGpxParams(gpxData, "cellular_surround.gpx", "red", true)
+                // Grant URI Permission to OsmAnd packages to be able to read it
+                context.grantUriPermission("net.osmand.plus", gpxUri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                context.grantUriPermission("net.osmand", gpxUri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+
+                val importParams = ImportGpxParams(gpxUri, "cellular_surround.gpx", "red", true)
                 aidl.importGpx(importParams)
 
                 val showParams = ShowGpxParams("cellular_surround.gpx")

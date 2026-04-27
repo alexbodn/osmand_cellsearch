@@ -23,7 +23,7 @@
         android:id="@+id/tvCredit"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Data powered by OpenCelliD.org\nPlease register to get a free API Key."
+        android:text="@string/opencellid_attribution"
         android:textAlignment="center"
         android:textColor="@android:color/holo_blue_dark"
         android:autoLink="web"

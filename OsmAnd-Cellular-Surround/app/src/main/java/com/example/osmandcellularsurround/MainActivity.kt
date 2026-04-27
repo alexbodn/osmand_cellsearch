@@ -154,14 +154,14 @@ class MainActivity : AppCompatActivity() {
 
             binding.tvStatus.text = "Status: Generating GPX track with ${surroundingTowers.size} towers..."
 
-            val gpxData = GpxGenerator.generateGpxString(mainTower, surroundingTowers)
+            val gpxUri = GpxGenerator.generateGpx(this@MainActivity, mainTower, surroundingTowers)
 
             binding.tvStatus.text = "Status: Sending to OsmAnd..."
 
             val connected = osmandHelper.connect()
             if (connected) {
                 withContext(Dispatchers.Main) {
-                    osmandHelper.showSurroundings(gpxData, mainTower.lat, mainTower.lon)
+                    osmandHelper.showSurroundings(gpxUri, mainTower.lat, mainTower.lon)
                     binding.tvStatus.text = "Status: Done. Check OsmAnd."
                 }
             } else {
