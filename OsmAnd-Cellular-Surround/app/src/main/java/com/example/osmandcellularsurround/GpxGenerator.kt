@@ -25,7 +25,7 @@ object GpxGenerator {
 
         FileOutputStream(file).bufferedWriter().use { writer ->
             writer.write("<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>\n")
-            writer.write("<gpx version=\"1.1\" creator=\"OsmAnd Cellular Surround\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n")
+            writer.write("<gpx version=\"1.1\" creator=\"OsmAnd Cellular Surround\" xmlns=\"http://www.topografix.com/GPX/1/1\" xmlns:osmand=\"https://osmand.net\">\n")
 
             // Main connected tower (highlighted in description or color)
             writer.write("  <wpt lat=\"${mainTower.lat}\" lon=\"${mainTower.lon}\">\n")
@@ -33,28 +33,23 @@ object GpxGenerator {
             writer.write("    <name>Connected: ${mainTower.mcc}-${mainTower.mnc}-${mainTower.lac}-${mainTower.cid}</name>\n")
             writer.write("    <desc>Currently Connected Cell Tower</desc>\n")
             writer.write("    <extensions>\n")
-            writer.write("      <color>#FF0000</color>\n")
-            writer.write("      <icon>radio_tower</icon>\n")
+            writer.write("      <osmand:color>#FF0000</osmand:color>\n")
+            writer.write("      <osmand:icon>radio_tower</osmand:icon>\n")
             writer.write("    </extensions>\n")
             writer.write("  </wpt>\n")
 
             // Surrounding towers
-            writer.write("  <trk>\n")
-            writer.write("    <name>Surrounding Towers</name>\n")
-            writer.write("    <trkseg>\n")
             for (tower in surroundingTowers) {
                 // Don't duplicate the main tower
                 if (tower.mcc == mainTower.mcc && tower.mnc == mainTower.mnc && tower.lac == mainTower.lac && tower.cid == mainTower.cid) continue
 
-                writer.write("      <trkpt lat=\"${tower.lat}\" lon=\"${tower.lon}\">\n")
-                writer.write("        <name>${tower.mcc}-${tower.mnc}-${tower.lac}-${tower.cid}</name>\n")
-                writer.write("        <extensions>\n")
-                writer.write("          <icon>radio_tower</icon>\n")
-                writer.write("        </extensions>\n")
-                writer.write("      </trkpt>\n")
+                writer.write("  <wpt lat=\"${tower.lat}\" lon=\"${tower.lon}\">\n")
+                writer.write("    <name>${tower.mcc}-${tower.mnc}-${tower.lac}-${tower.cid}</name>\n")
+                writer.write("    <extensions>\n")
+                writer.write("      <osmand:icon>radio_tower</osmand:icon>\n")
+                writer.write("    </extensions>\n")
+                writer.write("  </wpt>\n")
             }
-            writer.write("    </trkseg>\n")
-            writer.write("  </trk>\n")
 
             writer.write("</gpx>")
         }

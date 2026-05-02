@@ -112,17 +112,22 @@ class MainActivity : AppCompatActivity() {
         val apiKey = sharedPrefs.getString(KEY_API_KEY, "") ?: return
 
         binding.tvStatus.text = "Status: Scanning current cell..."
+        Toast.makeText(this, "Scanning current cell...", Toast.LENGTH_SHORT).show()
         binding.btnScan.isEnabled = false
 
         lifecycleScope.launch {
             val cellInfo = TelephonyHelper.getCurrentCellInfo(this@MainActivity)
             if (cellInfo == null) {
-                binding.tvStatus.text = "Status: Could not determine current cell (Check SIM / Signal)"
+                val msg = "Status: Could not determine current cell (Check SIM / Signal)"
+                binding.tvStatus.text = msg
+                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
                 binding.btnScan.isEnabled = true
                 return@launch
             }
 
-            binding.tvStatus.text = "Status: Connected to MCC:${cellInfo.mcc} MNC:${cellInfo.mnc} LAC:${cellInfo.lac} CID:${cellInfo.cid}. Resolving location..."
+            val msgConnected = "Connected to MCC:${cellInfo.mcc} MNC:${cellInfo.mnc}. Resolving location..."
+            binding.tvStatus.text = "Status: $msgConnected"
+            Toast.makeText(this@MainActivity, msgConnected, Toast.LENGTH_SHORT).show()
 
             val mainTower = dataSyncManager.ensureCellTowerExistsAndGet(
                 apiKey,
@@ -133,7 +138,9 @@ class MainActivity : AppCompatActivity() {
             )
 
             if (mainTower == null) {
-                binding.tvStatus.text = "Status: Failed to resolve location for current cell tower."
+                val msgFailed = "Failed to resolve location for current cell tower."
+                binding.tvStatus.text = "Status: $msgFailed"
+                Toast.makeText(this@MainActivity, msgFailed, Toast.LENGTH_LONG).show()
                 binding.btnScan.isEnabled = true
                 return@launch
             }
@@ -141,7 +148,9 @@ class MainActivity : AppCompatActivity() {
             val radiusPosition = sharedPrefs.getInt(KEY_RADIUS, 0)
             val radiusKm = if (radiusPosition == 1) 20.0 else 4.0
 
-            binding.tvStatus.text = "Status: Finding surrounding towers (${radiusKm.toInt()}km radius)..."
+            val msgRadius = "Finding surrounding towers (${radiusKm.toInt()}km radius)..."
+            binding.tvStatus.text = "Status: $msgRadius"
+            Toast.makeText(this@MainActivity, msgRadius, Toast.LENGTH_SHORT).show()
 
             val boundingBox = GpxGenerator.calculateBoundingBox(mainTower.lat, mainTower.lon, radiusKm)
             val minLat = boundingBox[0]
@@ -152,20 +161,28 @@ class MainActivity : AppCompatActivity() {
             val dao = AppDatabase.getDatabase(this@MainActivity).cellTowerDao()
             val surroundingTowers = dao.getTowersInBoundingBox(minLat, maxLat, minLon, maxLon)
 
-            binding.tvStatus.text = "Status: Generating GPX track with ${surroundingTowers.size} towers..."
+            val msgGpx = "Generating GPX track with ${surroundingTowers.size} towers..."
+            binding.tvStatus.text = "Status: $msgGpx"
+            Toast.makeText(this@MainActivity, msgGpx, Toast.LENGTH_SHORT).show()
 
             val gpxUri = GpxGenerator.generateGpx(this@MainActivity, mainTower, surroundingTowers)
 
-            binding.tvStatus.text = "Status: Sending to OsmAnd..."
+            val msgSend = "Sending to OsmAnd..."
+            binding.tvStatus.text = "Status: $msgSend"
+            Toast.makeText(this@MainActivity, msgSend, Toast.LENGTH_SHORT).show()
 
             val connected = osmandHelper.connect()
             if (connected) {
                 withContext(Dispatchers.Main) {
                     osmandHelper.showSurroundings(gpxUri, mainTower.lat, mainTower.lon)
-                    binding.tvStatus.text = "Status: Done. Check OsmAnd."
+                    val msgDone = "Done. Check OsmAnd."
+                    binding.tvStatus.text = "Status: $msgDone"
+                    Toast.makeText(this@MainActivity, msgDone, Toast.LENGTH_SHORT).show()
                 }
             } else {
-                binding.tvStatus.text = "Status: Failed to connect to OsmAnd. Is it installed?"
+                val msgNoConn = "Failed to connect to OsmAnd. Is it installed?"
+                binding.tvStatus.text = "Status: $msgNoConn"
+                Toast.makeText(this@MainActivity, msgNoConn, Toast.LENGTH_LONG).show()
             }
 
             binding.btnScan.isEnabled = true
