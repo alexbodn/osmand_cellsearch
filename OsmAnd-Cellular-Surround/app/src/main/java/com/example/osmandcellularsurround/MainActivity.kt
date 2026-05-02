@@ -17,6 +17,8 @@ import com.example.osmandcellularsurround.api.OpenCellidApi
 import com.example.osmandcellularsurround.api.OpenCellidDownloader
 import kotlinx.coroutines.Dispatchers
 import android.widget.ArrayAdapter
+import android.content.ClipboardManager
+import android.content.ClipData
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -100,6 +102,13 @@ class MainActivity : AppCompatActivity() {
                     )
                 )
             }
+        }
+
+        binding.btnCopyLog.setOnClickListener {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = ClipData.newPlainText("OsmAnd Cellular Log", binding.tvStatus.text)
+            clipboard.setPrimaryClip(clip)
+            Toast.makeText(this, "Log copied to clipboard", Toast.LENGTH_SHORT).show()
         }
     }
 
