@@ -15,7 +15,7 @@ object OpenCellidApi {
     }
 
     // Fallback to Unwired Labs API to get a single cell
-    suspend fun getCellLocation(apiKey: String, mcc: Int, mnc: Int, lac: Int, cid: Long): Pair<Double, Double>? {
+    suspend fun getCellLocation(apiKey: String, radio: String, mcc: Int, mnc: Int, lac: Int, cid: Long): Pair<Double, Double>? {
         return withContext(Dispatchers.IO) {
             try {
                 // You can also use the direct opencellid url if unwired labs process.php requires different structure.
@@ -23,7 +23,7 @@ object OpenCellidApi {
                 val json = """
                     {
                         "token": "$apiKey",
-                        "radio": "gsm",
+                        "radio": "$radio",
                         "mcc": $mcc,
                         "mnc": $mnc,
                         "cells": [{

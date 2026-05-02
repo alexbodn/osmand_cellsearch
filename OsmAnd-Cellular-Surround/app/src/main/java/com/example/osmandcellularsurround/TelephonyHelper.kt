@@ -12,7 +12,7 @@ import androidx.core.content.ContextCompat
 
 object TelephonyHelper {
 
-    data class CellData(val mcc: Int, val mnc: Int, val lac: Int, val cid: Long)
+    data class CellData(val radio: String, val mcc: Int, val mnc: Int, val lac: Int, val cid: Long)
 
     fun getCurrentCellInfo(context: Context): CellData? {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -33,6 +33,7 @@ object TelephonyHelper {
                     val identity = cellInfo.cellIdentity
                     if (identity.mcc != Integer.MAX_VALUE && identity.mccString != null) {
                         return CellData(
+                            "gsm",
                             identity.mccString?.toIntOrNull() ?: identity.mcc,
                             identity.mncString?.toIntOrNull() ?: identity.mnc,
                             identity.lac,
@@ -43,6 +44,7 @@ object TelephonyHelper {
                     val identity = cellInfo.cellIdentity
                     if (identity.mcc != Integer.MAX_VALUE && identity.mccString != null) {
                         return CellData(
+                            "lte",
                             identity.mccString?.toIntOrNull() ?: identity.mcc,
                             identity.mncString?.toIntOrNull() ?: identity.mnc,
                             identity.tac,
@@ -53,6 +55,7 @@ object TelephonyHelper {
                     val identity = cellInfo.cellIdentity
                     if (identity.mcc != Integer.MAX_VALUE && identity.mccString != null) {
                         return CellData(
+                            "umts",
                             identity.mccString?.toIntOrNull() ?: identity.mcc,
                             identity.mncString?.toIntOrNull() ?: identity.mnc,
                             identity.lac,
