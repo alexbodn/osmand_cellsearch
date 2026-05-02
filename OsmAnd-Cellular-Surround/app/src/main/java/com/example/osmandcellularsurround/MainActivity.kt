@@ -138,7 +138,7 @@ class MainActivity : AppCompatActivity() {
             )
 
             if (mainTower == null) {
-                val msgFailed = "Failed to resolve location for current cell tower."
+                val msgFailed = "Failed to resolve location for MCC:${cellInfo.mcc} MNC:${cellInfo.mnc} LAC:${cellInfo.lac} CID:${cellInfo.cid}."
                 binding.tvStatus.text = "Status: $msgFailed"
                 Toast.makeText(this@MainActivity, msgFailed, Toast.LENGTH_LONG).show()
                 binding.btnScan.isEnabled = true
