@@ -25,7 +25,10 @@ object OpenCellidDownloader {
             try {
                 // Official OpenCelliD database link format for MCC
                 val url = "https://opencellid.org/ocid/downloads?token=$apiKey&type=mcc&file=$mcc.csv.gz"
-                logger("Downloader: Requesting GET $url")
+
+                val maskedKey = if (apiKey.length > 4) apiKey.substring(0, 4) + "****" else "****"
+                val logUrl = "https://opencellid.org/ocid/downloads?token=$maskedKey&type=mcc&file=$mcc.csv.gz"
+                logger("Downloader: Requesting GET $logUrl")
 
                 val request = Request.Builder().url(url).build()
                 val response = client.newCall(request).execute()

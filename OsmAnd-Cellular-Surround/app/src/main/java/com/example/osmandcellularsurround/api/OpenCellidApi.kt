@@ -33,7 +33,10 @@ object OpenCellidApi {
                     }
                 """.trimIndent()
 
-                logger("API Request Body: $json")
+                val maskedKey = if (apiKey.length > 4) apiKey.substring(0, 4) + "****" else "****"
+                val logJson = json.replace(apiKey, maskedKey)
+
+                logger("API Request Body: $logJson")
                 val body = okhttp3.RequestBody.create("application/json".toMediaTypeOrNull(), json)
                 val request = Request.Builder()
                     .url("https://us1.unwiredlabs.com/v2/process.php")

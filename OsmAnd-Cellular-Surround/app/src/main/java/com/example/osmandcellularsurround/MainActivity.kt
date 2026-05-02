@@ -163,7 +163,7 @@ class MainActivity : AppCompatActivity() {
             if (mainTower == null) {
                 val msgFailed = "Failed to resolve location for MCC:${cellInfo.mcc} MNC:${cellInfo.mnc} LAC:${cellInfo.lac} CID:${cellInfo.cid}. Please consider donating data to OpenCelliD!"
                 appendLog(msgFailed)
-                Toast.makeText(this@MainActivity, "Failed to resolve location. Please donate to OpenCelliD!", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MainActivity, msgFailed, Toast.LENGTH_LONG).show()
                 binding.btnScan.isEnabled = true
                 return@launch
             }
