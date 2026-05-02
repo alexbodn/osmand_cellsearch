@@ -20,24 +20,31 @@ object OpenCellidDownloader {
     // Example URL. OpenCelliD usually provides MCC specific downloads if logged in or structured via link.
     // For the sake of this app, we will use the standard public link format if available,
     // or simulate downloading the country database.
-    suspend fun downloadAndImportMcc(context: Context, apiKey: String, mcc: Int): Boolean {
+    suspend fun downloadAndImportMcc(context: Context, apiKey: String, mcc: Int, logger: (String) -> Unit): Boolean {
         return withContext(Dispatchers.IO) {
             try {
                 // Official OpenCelliD database link format for MCC
                 val url = "https://opencellid.org/ocid/downloads?token=$apiKey&type=mcc&file=$mcc.csv.gz"
+                logger("Downloader: Requesting GET $url")
 
                 val request = Request.Builder().url(url).build()
                 val response = client.newCall(request).execute()
 
+                logger("Downloader: HTTP Code: ${response.code}")
+
                 if (response.isSuccessful && response.body != null) {
+                    logger("Downloader: Parsing Gzip stream...")
                     val inputStream: InputStream = response.body!!.byteStream()
                     val gzipInputStream = GZIPInputStream(inputStream)
 
                     val dao = AppDatabase.getDatabase(context).cellTowerDao()
-                    CsvParser.parseAndInsert(gzipInputStream, dao)
+                    CsvParser.parseAndInsert(gzipInputStream, dao, logger)
                     return@withContext true
+                } else {
+                    logger("Downloader: Failed with body ${response.body?.string() ?: ""}")
                 }
             } catch (e: Exception) {
+                logger("Downloader: Exception: ${e.message}")
                 e.printStackTrace()
             }
             false

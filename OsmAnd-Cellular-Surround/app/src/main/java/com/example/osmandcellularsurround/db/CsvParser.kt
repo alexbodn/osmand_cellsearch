@@ -7,7 +7,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 
 object CsvParser {
-    suspend fun parseAndInsert(inputStream: InputStream, dao: CellTowerDao) {
+    suspend fun parseAndInsert(inputStream: InputStream, dao: CellTowerDao, logger: (String) -> Unit) {
         withContext(Dispatchers.IO) {
             val reader = BufferedReader(InputStreamReader(inputStream))
             // Skip header if OpenCelliD CSV has one, or just process.
@@ -16,6 +16,7 @@ object CsvParser {
 
             var line: String? = reader.readLine()
             val towers = mutableListOf<CellTower>()
+            var totalCount = 0
 
             while (line != null) {
                 if (line.startsWith("radio")) {
@@ -37,6 +38,7 @@ object CsvParser {
 
                         if (towers.size >= 5000) {
                             dao.insertAll(towers)
+                            totalCount += towers.size
                             towers.clear()
                         }
                     } catch (e: Exception) {
@@ -48,8 +50,10 @@ object CsvParser {
 
             if (towers.isNotEmpty()) {
                 dao.insertAll(towers)
+                totalCount += towers.size
             }
             reader.close()
+            logger("CSV Parser: Inserted $totalCount towers.")
         }
     }
 }
