@@ -297,8 +297,11 @@ class MainActivity : AppCompatActivity() {
 
             val connected = osmandHelper.connect()
             if (connected) {
+                val zoomDouble = 15.0 - (Math.log(radiusKm / 0.5) / Math.log(2.0))
+                val zoomLevel = Math.max(2, Math.min(20, zoomDouble.toInt()))
+
                 withContext(Dispatchers.Main) {
-                    osmandHelper.showSurroundings(gpxUri, mainTower.lat, mainTower.lon) { logMsg ->
+                    osmandHelper.showSurroundings(gpxUri, mainTower.lat, mainTower.lon, zoomLevel) { logMsg ->
                         appendLog(logMsg)
                     }
                     val msgDone = "Done. Check OsmAnd."
