@@ -89,12 +89,12 @@ class MainActivity : AppCompatActivity() {
                 when (tab?.position) {
                     0 -> {
                         binding.scrollViewStatus.visibility = View.VISIBLE
-                        binding.llSqlContainer.visibility = View.GONE
+                        binding.scrollViewConfig.visibility = View.GONE
                         binding.btnCopyLog.text = "Copy Log"
                     }
                     1 -> {
                         binding.scrollViewStatus.visibility = View.GONE
-                        binding.llSqlContainer.visibility = View.VISIBLE
+                        binding.scrollViewConfig.visibility = View.VISIBLE
                         binding.btnCopyLog.text = "Copy SQL Result"
                     }
                 }
