@@ -4,6 +4,8 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RawQuery
+import androidx.sqlite.db.SupportSQLiteQuery
 
 @Dao
 interface CellTowerDao {
@@ -25,4 +27,7 @@ interface CellTowerDao {
 
     @Query("SELECT COUNT(*) FROM cell_towers WHERE mcc = :mcc")
     suspend fun countTowersByMcc(mcc: Int): Int
+
+    @RawQuery
+    suspend fun getTowersViaSql(query: SupportSQLiteQuery): List<CellTower>
 }

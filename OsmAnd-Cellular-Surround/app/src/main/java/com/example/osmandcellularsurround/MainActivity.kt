@@ -19,6 +19,7 @@ import com.example.osmandcellularsurround.databinding.ActivityMainBinding
 import com.example.osmandcellularsurround.db.AppDatabase
 import com.example.osmandcellularsurround.api.OpenCellidApi
 import com.example.osmandcellularsurround.api.OpenCellidDownloader
+import androidx.sqlite.db.SimpleSQLiteQuery
 import kotlinx.coroutines.Dispatchers
 import android.widget.ArrayAdapter
 import android.content.ClipboardManager
@@ -102,6 +103,11 @@ class MainActivity : AppCompatActivity() {
             override fun onTabReselected(tab: TabLayout.Tab?) {}
         })
 
+
+        // Setup SQL Editor default if empty
+        if (binding.etSql.text.toString().isEmpty()) {
+            binding.etSql.setText("SELECT * FROM cell_towers WHERE lat BETWEEN :minLat AND :maxLat AND lon BETWEEN :minLon AND :maxLon")
+        }
 
         // Load saved preferences
         val savedKey = sharedPrefs.getString(KEY_API_KEY, "")
@@ -187,9 +193,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun runSql(sql: String) {
-        appendSqlResult("--- Running SQL ---", clear = true)
-
+    private fun buildParameterizedSql(sql: String): String {
         var parsedRadio = ""
         var parsedMcc = ""
         var parsedMnc = ""
@@ -206,7 +210,7 @@ class MainActivity : AppCompatActivity() {
             parsedCid = parts[4].trim()
         }
 
-        val finalSql = sql
+        return sql
             .replace(":radio", "'$parsedRadio'")
             .replace(":mcc", parsedMcc.ifEmpty { "0" })
             .replace(":mnc", parsedMnc.ifEmpty { "0" })
@@ -216,7 +220,12 @@ class MainActivity : AppCompatActivity() {
             .replace(":maxLat", currentMaxLat.toString())
             .replace(":minLon", currentMinLon.toString())
             .replace(":maxLon", currentMaxLon.toString())
+    }
 
+    private fun runSql(sql: String) {
+        appendSqlResult("--- Running SQL ---", clear = true)
+
+        val finalSql = buildParameterizedSql(sql)
         appendSqlResult("Query: $finalSql")
 
         lifecycleScope.launch {
@@ -348,8 +357,16 @@ class MainActivity : AppCompatActivity() {
             currentMaxLon = maxLon
 
             val dao = AppDatabase.getDatabase(this@MainActivity).cellTowerDao()
-            appendLog("DB Query: getTowersInBoundingBox($minLat, $maxLat, $minLon, $maxLon)")
-            val surroundingTowers = dao.getTowersInBoundingBox(minLat, maxLat, minLon, maxLon)
+
+            val sqlEditorContent = binding.etSql.text.toString().trim()
+            val surroundingTowers = if (sqlEditorContent.isNotEmpty()) {
+                val finalSql = buildParameterizedSql(sqlEditorContent)
+                appendLog("DB Query (via SQL Editor): $finalSql")
+                dao.getTowersViaSql(SimpleSQLiteQuery(finalSql))
+            } else {
+                appendLog("DB Query: getTowersInBoundingBox($minLat, $maxLat, $minLon, $maxLon)")
+                dao.getTowersInBoundingBox(minLat, maxLat, minLon, maxLon)
+            }
 
             val msgGpx = "Generating GPX track with ${surroundingTowers.size} surrounding towers..."
             appendLog(msgGpx)
