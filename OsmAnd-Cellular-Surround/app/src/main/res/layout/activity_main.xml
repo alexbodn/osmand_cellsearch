@@ -261,33 +261,51 @@
                 android:id="@+id/llSqlInput"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
+                android:orientation="vertical">
 
                 <EditText
                     android:id="@+id/etSql"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="match_parent"
-                    android:hint="SQL query (e.g., SELECT * FROM cell_towers LIMIT 10)"
+                    android:layout_width="match_parent"
+                    android:layout_height="200dp"
                     android:gravity="top|start"
+                    android:inputType="textMultiLine"
+                    android:minLines="5"
+                    android:scrollbars="vertical"
+                    android:hint="SQL query (e.g., SELECT * FROM cell_towers LIMIT 10)"
                     android:textSize="12sp" />
 
                 <LinearLayout
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical">
+                    android:orientation="horizontal"
+                    android:gravity="end">
 
                     <Button
-                        android:id="@+id/btnRunSql"
+                        android:id="@+id/btnOpenFile"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Run SQL" />
+                        android:text="Open File" />
+
+                    <Button
+                        android:id="@+id/btnSaveSql"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Save SQL"
+                        android:layout_marginStart="8dp" />
 
                     <Button
                         android:id="@+id/btnCopySqlResult"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Copy Result" />
+                        android:text="Copy Result"
+                        android:layout_marginStart="8dp" />
+
+                    <Button
+                        android:id="@+id/btnRunSql"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Run SQL"
+                        android:layout_marginStart="8dp" />
                 </LinearLayout>
             </LinearLayout>
 

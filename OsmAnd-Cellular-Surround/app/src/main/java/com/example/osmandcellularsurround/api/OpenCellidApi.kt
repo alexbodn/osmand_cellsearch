@@ -86,7 +86,6 @@ object OpenCellidApi {
                     else -> radio.uppercase()
                 }
 
-                // https://opencellid.org/measure/add?key=xxx&lat=10.11&lon=11.12&mcc=100&mnc=10&lac=11&cellid=12&act=LTE
                 val url = "https://opencellid.org/measure/add" +
                         "?key=$apiKey" +
                         "&lat=$lat" +
