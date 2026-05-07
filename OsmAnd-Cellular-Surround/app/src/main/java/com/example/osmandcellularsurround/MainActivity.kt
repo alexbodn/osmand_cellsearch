@@ -278,21 +278,31 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "SQL Saved", Toast.LENGTH_SHORT).show()
         }
 
-        val openFileLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        val openFileLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             uri?.let {
-                try {
-                    contentResolver.openInputStream(it)?.use { inputStream ->
-                        val text = inputStream.bufferedReader().use { reader -> reader.readText() }
-                        binding.etSql.setText(text)
+                lifecycleScope.launch {
+                    try {
+                        withContext(Dispatchers.IO) {
+                            contentResolver.openInputStream(it)?.use { inputStream ->
+                                val text = inputStream.bufferedReader().use { reader -> reader.readText() }
+                                withContext(Dispatchers.Main) {
+                                    binding.etSql.setText(text)
+                                    Toast.makeText(this@MainActivity, "File loaded", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(this@MainActivity, "Failed to read file: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
                     }
-                } catch (e: Exception) {
-                    Toast.makeText(this, "Failed to read file: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
         }
 
         binding.btnOpenFile.setOnClickListener {
-            openFileLauncher.launch("text/*")
+            // Support generic text files or unknown types often assigned to .sql
+            openFileLauncher.launch(arrayOf("text/*", "application/sql", "application/x-sql", "text/sql", "application/octet-stream"))
         }
     }
 
