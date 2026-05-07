@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity() {
     private val PREFS_NAME = "OsmAndCellularPrefs"
     private val KEY_API_KEY = "api_key"
     private val KEY_RADIUS = "scan_radius"
+    private val KEY_SQL = "saved_sql"
 
     // To hold latest values for SQL execution
     private var currentMinLat: Double? = null
@@ -102,14 +103,17 @@ class MainActivity : AppCompatActivity() {
         })
 
 
-        // Setup SQL Editor default if empty
-        if (binding.etSql.text.toString().isEmpty()) {
-            binding.etSql.setText("SELECT * FROM cell_towers WHERE case when :minLat is not null then lat BETWEEN :minLat AND :maxLat AND lon BETWEEN :minLon AND :maxLon else lac=:lac end")
-        }
-
         // Load saved preferences
         val savedKey = sharedPrefs.getString(KEY_API_KEY, "")
         binding.etApiKey.setText(savedKey)
+        val savedSql = sharedPrefs.getString(KEY_SQL, "")
+        if (!savedSql.isNullOrEmpty()) {
+            binding.etSql.setText(savedSql)
+        } else if (binding.etSql.text.toString().isEmpty()) {
+            // Set default SQL if empty and no saved SQL
+            binding.etSql.setText("SELECT * FROM cell_towers WHERE case when :minLat is not null then lat BETWEEN :minLat AND :maxLat AND lon BETWEEN :minLon AND :maxLon else lac=:lac end")
+        }
+
         val savedRadius = sharedPrefs.getInt(KEY_RADIUS, 0)
         binding.spinnerRadius.setSelection(savedRadius)
 
@@ -175,6 +179,29 @@ class MainActivity : AppCompatActivity() {
             if (sql.isNotEmpty()) {
                 runSql(sql)
             }
+        }
+
+        binding.btnSaveSql.setOnClickListener {
+            val sql = binding.etSql.text.toString().trim()
+            sharedPrefs.edit().putString(KEY_SQL, sql).apply()
+            Toast.makeText(this, "SQL Saved", Toast.LENGTH_SHORT).show()
+        }
+
+        val openFileLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            uri?.let {
+                try {
+                    contentResolver.openInputStream(it)?.use { inputStream ->
+                        val text = inputStream.bufferedReader().use { reader -> reader.readText() }
+                        binding.etSql.setText(text)
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Failed to read file: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        binding.btnOpenFile.setOnClickListener {
+            openFileLauncher.launch("text/*")
         }
     }
 
@@ -251,13 +278,6 @@ class MainActivity : AppCompatActivity() {
 
                     var count = 0
 
-                    val latIndex = columns.indexOf("lat")
-                    val lonIndex = columns.indexOf("lon")
-                    var minLatCalc: Double? = null
-                    var maxLatCalc: Double? = null
-                    var minLonCalc: Double? = null
-                    var maxLonCalc: Double? = null
-
                     while (cursor.moveToNext() && count < 100) { // limit output so we don't crash the textview
                         val row = StringBuilder()
                         for (i in columns.indices) {
@@ -270,48 +290,10 @@ class MainActivity : AppCompatActivity() {
                         }
                         appendSqlResult(row.toString())
                         count++
-
-                        if (currentMinLat == null && latIndex >= 0 && lonIndex >= 0) {
-                            try {
-                                val lat = cursor.getDouble(latIndex)
-                                val lon = cursor.getDouble(lonIndex)
-                                if (minLatCalc == null || lat < minLatCalc!!) minLatCalc = lat
-                                if (maxLatCalc == null || lat > maxLatCalc!!) maxLatCalc = lat
-                                if (minLonCalc == null || lon < minLonCalc!!) minLonCalc = lon
-                                if (maxLonCalc == null || lon > maxLonCalc!!) maxLonCalc = lon
-                            } catch (e: Exception) {
-                                // ignore parse errors for coordinates
-                            }
-                        }
-                    }
-
-                    // Note: If we had more than 100 rows and wanted full bounds, we should continue reading them
-                    // but without appending to string builder.
-                    if (currentMinLat == null && latIndex >= 0 && lonIndex >= 0) {
-                        while (cursor.moveToNext()) {
-                            try {
-                                val lat = cursor.getDouble(latIndex)
-                                val lon = cursor.getDouble(lonIndex)
-                                if (minLatCalc == null || lat < minLatCalc!!) minLatCalc = lat
-                                if (maxLatCalc == null || lat > maxLatCalc!!) maxLatCalc = lat
-                                if (minLonCalc == null || lon < minLonCalc!!) minLonCalc = lon
-                                if (maxLonCalc == null || lon > maxLonCalc!!) maxLonCalc = lon
-                            } catch (e: Exception) {
-                                // ignore
-                            }
-                        }
                     }
 
                     if (count >= 100 || cursor.moveToNext()) {
                         appendSqlResult("... (results truncated to 100 rows)")
-                    }
-
-                    if (currentMinLat == null && minLatCalc != null) {
-                        currentMinLat = minLatCalc
-                        currentMaxLat = maxLatCalc
-                        currentMinLon = minLonCalc
-                        currentMaxLon = maxLonCalc
-                        appendSqlResult("Calculated new map boundaries from results.")
                     }
 
                     cursor.close()
@@ -442,7 +424,11 @@ class MainActivity : AppCompatActivity() {
 
             val sqlEditorContent = binding.etSql.text.toString().trim()
             val surroundingTowers = if (sqlEditorContent.isNotEmpty()) {
-                val finalSql = buildParameterizedSql(sqlEditorContent)
+                // Determine if we need to order the query
+                var finalSql = buildParameterizedSql(sqlEditorContent)
+                if (!finalSql.contains("ORDER BY", ignoreCase = true)) {
+                    finalSql += " ORDER BY lat, lon"
+                }
                 appendLog("DB Query (via SQL Editor): $finalSql")
                 dao.getTowersViaSql(SimpleSQLiteQuery(finalSql))
             } else if (currentMinLat != null && currentMaxLat != null && currentMinLon != null && currentMaxLon != null) {
