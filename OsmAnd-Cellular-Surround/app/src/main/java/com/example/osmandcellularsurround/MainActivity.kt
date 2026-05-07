@@ -52,14 +52,12 @@ class MainActivity : AppCompatActivity() {
     private var currentMaxLon: Double? = null
 
     private var locationManager: LocationManager? = null
-    private var latestReliableLocation: Location? = null
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true &&
             permissions[Manifest.permission.READ_PHONE_STATE] == true) {
-            startLocationUpdates()
             performScan()
         } else {
             Toast.makeText(this, "Permissions required to scan cell networks", Toast.LENGTH_LONG).show()
@@ -95,29 +93,43 @@ class MainActivity : AppCompatActivity() {
         // Setup Location tracking
         locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
-        binding.etCellInfo.addTextChangedListener(object : TextWatcher {
-            override fun afterTextChanged(s: Editable?) { checkDonateEnablement() }
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-        })
+        // We no longer evaluate btnDonate disablement dynamically based on text watcher.
+        // It's checked on-demand when clicked.
+
+        // Setup Links in Background Tab
+        binding.tvDocumentationLink.text = HtmlCompat.fromHtml("<a href=\"https://wiki.opencellid.org/wiki/API\">Read OpenCelliD Documentation</a>", HtmlCompat.FROM_HTML_MODE_COMPACT)
+        binding.tvDocumentationLink.movementMethod = LinkMovementMethod.getInstance()
+
+        binding.tvUserProfileLink.text = HtmlCompat.fromHtml("<a href=\"https://opencellid.org\">View your OpenCelliD Profile &amp; History</a>", HtmlCompat.FROM_HTML_MODE_COMPACT)
+        binding.tvUserProfileLink.movementMethod = LinkMovementMethod.getInstance()
 
         // Setup TabLayout
         binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab?) {
                 when (tab?.position) {
                     0 -> {
-                        binding.scrollViewStatus.visibility = View.VISIBLE
+                        binding.scrollViewBackground.visibility = View.VISIBLE
                         binding.scrollViewConfig.visibility = View.GONE
+                        binding.scrollViewStatus.visibility = View.GONE
                     }
                     1 -> {
-                        binding.scrollViewStatus.visibility = View.GONE
+                        binding.scrollViewBackground.visibility = View.GONE
                         binding.scrollViewConfig.visibility = View.VISIBLE
+                        binding.scrollViewStatus.visibility = View.GONE
+                    }
+                    2 -> {
+                        binding.scrollViewBackground.visibility = View.GONE
+                        binding.scrollViewConfig.visibility = View.GONE
+                        binding.scrollViewStatus.visibility = View.VISIBLE
                     }
                 }
             }
             override fun onTabUnselected(tab: TabLayout.Tab?) {}
             override fun onTabReselected(tab: TabLayout.Tab?) {}
         })
+
+        // Select initial tab
+        binding.tabLayout.getTabAt(0)?.select()
 
 
         // Setup SQL Editor default if empty
@@ -140,7 +152,6 @@ class MainActivity : AppCompatActivity() {
                     .putInt(KEY_RADIUS, radiusPosition)
                     .apply()
                 Toast.makeText(this, "Preferences Saved", Toast.LENGTH_SHORT).show()
-                checkDonateEnablement()
             }
         }
 
@@ -160,37 +171,67 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnDonate.setOnClickListener {
-            val location = latestReliableLocation
-            if (location == null) {
-                Toast.makeText(this, "No reliable GPS location yet.", Toast.LENGTH_SHORT).show()
+            val apiKey = sharedPrefs.getString(KEY_API_KEY, "") ?: ""
+            if (apiKey.isEmpty()) {
+                Toast.makeText(this, "Please save an API key first.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            val apiKey = sharedPrefs.getString(KEY_API_KEY, "") ?: ""
-            if (apiKey.isEmpty()) return@setOnClickListener
 
-            val parts = binding.etCellInfo.text.toString().trim().split(",")
-            if (parts.size != 5) return@setOnClickListener
+            if (!hasPermissions()) {
+                Toast.makeText(this, "Location and Phone permissions required to donate data.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
 
-            val radio = parts[0].trim()
-            val mcc = parts[1].trim().toIntOrNull() ?: return@setOnClickListener
-            val mnc = parts[2].trim().toIntOrNull() ?: return@setOnClickListener
-            val lac = parts[3].trim().toIntOrNull() ?: return@setOnClickListener
-            val cid = parts[4].trim().toLongOrNull() ?: return@setOnClickListener
+            val cellInfo = TelephonyHelper.getCurrentCellInfo(this)
+            if (cellInfo == null) {
+                Toast.makeText(this, "Cannot read live cell info.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
 
-            binding.btnDonate.isEnabled = false
-            appendLog("Status: Donating measurement to OpenCelliD...")
+            try {
+                // Fetch location on-demand
+                // Use location manager to get the last known location or current location
+                // Using last known GPS for immediate response if accurate enough, otherwise wait
 
-            lifecycleScope.launch {
-                val success = OpenCellidApi.donateData(apiKey, radio, mcc, mnc, lac, cid, location.latitude, location.longitude) { msg ->
-                    appendLog(msg)
-                }
-
-                if (success) {
-                    Toast.makeText(this@MainActivity, "Data donated successfully", Toast.LENGTH_SHORT).show()
+                val lastKnown = locationManager?.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                if (lastKnown != null && lastKnown.hasAccuracy() && lastKnown.accuracy < 20f &&
+                    (System.currentTimeMillis() - lastKnown.time < 30000)) {
+                    // Location is recent (30s) and accurate
+                    donateLiveMeasurement(apiKey, cellInfo, lastKnown)
                 } else {
-                    Toast.makeText(this@MainActivity, "Failed to donate data", Toast.LENGTH_SHORT).show()
+                    // Request a single fresh update
+                    Toast.makeText(this, "Waiting for reliable GPS (<20m)...", Toast.LENGTH_SHORT).show()
+                    binding.btnDonate.isEnabled = false
+
+                    val listener = object : LocationListener {
+                        override fun onLocationChanged(location: Location) {
+                            if (location.hasAccuracy() && location.accuracy < 20f) {
+                                locationManager?.removeUpdates(this)
+                                donateLiveMeasurement(apiKey, cellInfo, location)
+                                binding.btnDonate.isEnabled = true
+                            }
+                        }
+                        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+                        override fun onProviderEnabled(provider: String) {}
+                        override fun onProviderDisabled(provider: String) {
+                            Toast.makeText(this@MainActivity, "GPS provider disabled", Toast.LENGTH_SHORT).show()
+                            locationManager?.removeUpdates(this)
+                            binding.btnDonate.isEnabled = true
+                        }
+                    }
+                    locationManager?.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, listener)
+
+                    // Stop listening after 10 seconds if no accurate fix
+                    binding.btnDonate.postDelayed({
+                        locationManager?.removeUpdates(listener)
+                        if (!binding.btnDonate.isEnabled) {
+                            Toast.makeText(this@MainActivity, "Failed to get reliable GPS.", Toast.LENGTH_SHORT).show()
+                            binding.btnDonate.isEnabled = true
+                        }
+                    }, 10000)
                 }
-                checkDonateEnablement()
+            } catch (e: SecurityException) {
+                Toast.makeText(this, "Location permissions denied.", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -235,26 +276,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun startLocationUpdates() {
-        try {
-            // Register for location updates to determine GPS reliability
-            locationManager?.requestLocationUpdates(
-                LocationManager.GPS_PROVIDER,
-                1000L, // 1 second
-                0f,    // 0 meters
-                locationListener
-            )
-            locationManager?.requestLocationUpdates(
-                LocationManager.NETWORK_PROVIDER,
-                1000L,
-                0f,
-                locationListener
-            )
-        } catch (e: SecurityException) {
-            // Permissions are checked before calling this method
-        }
-    }
-
     override fun onResume() {
         super.onResume()
         if (hasPermissions()) {
@@ -266,61 +287,30 @@ class MainActivity : AppCompatActivity() {
                     binding.etCellInfo.setText(infoStr)
                 }
             }
-            startLocationUpdates()
         }
     }
 
-    override fun onPause() {
-        super.onPause()
-        locationManager?.removeUpdates(locationListener)
-    }
+    private fun donateLiveMeasurement(apiKey: String, cellInfo: TelephonyHelper.CellData, location: Location) {
+        appendLog("Status: Donating live measurement to OpenCelliD...")
 
-    private val locationListener = object : LocationListener {
-        override fun onLocationChanged(location: Location) {
-            if (location.hasAccuracy() && location.accuracy < 20f) {
-                latestReliableLocation = location
-            } else {
-                // Invalidate location if it's too inaccurate, or if it's been too long since a reliable one
-                // To keep it simple, just invalidate it immediately when accuracy drops.
-                latestReliableLocation = null
+        lifecycleScope.launch {
+            val success = OpenCellidApi.donateData(
+                apiKey,
+                cellInfo.radio,
+                cellInfo.mcc,
+                cellInfo.mnc,
+                cellInfo.lac,
+                cellInfo.cid,
+                location.latitude,
+                location.longitude
+            ) { msg ->
+                appendLog(msg)
             }
-            checkDonateEnablement()
-        }
 
-        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
-        override fun onProviderEnabled(provider: String) {}
-        override fun onProviderDisabled(provider: String) {
-            if (provider == LocationManager.GPS_PROVIDER) {
-                latestReliableLocation = null
-                checkDonateEnablement()
-            }
-        }
-    }
-
-    private fun checkDonateEnablement() {
-        val apiKey = sharedPrefs.getString(KEY_API_KEY, "") ?: ""
-        val hasApiKey = apiKey.isNotEmpty()
-
-        var hasValidCellInfo = false
-        val parts = binding.etCellInfo.text.toString().trim().split(",")
-        if (parts.size == 5) {
-            hasValidCellInfo = parts.all { it.isNotEmpty() }
-        }
-
-        val hasReliableLocation = latestReliableLocation != null
-
-        runOnUiThread {
-            binding.btnDonate.isEnabled = hasApiKey && hasValidCellInfo && hasReliableLocation
-
-            // Optional: update text to show why it's disabled or enabled
-            if (!hasApiKey) {
-                binding.btnDonate.text = "DONATE (NO KEY)"
-            } else if (!hasValidCellInfo) {
-                binding.btnDonate.text = "DONATE (NO CELL)"
-            } else if (!hasReliableLocation) {
-                binding.btnDonate.text = "DONATE (WAITING GPS)"
+            if (success) {
+                Toast.makeText(this@MainActivity, "Data donated successfully", Toast.LENGTH_SHORT).show()
             } else {
-                binding.btnDonate.text = "DONATE"
+                Toast.makeText(this@MainActivity, "Failed to donate data", Toast.LENGTH_SHORT).show()
             }
         }
     }
