@@ -264,7 +264,7 @@
                 android:orientation="vertical">
 
                 <EditText
-                    android:id="@+id/etSql"
+                    android:id="@+id/etTowersSql"
                     android:layout_width="match_parent"
                     android:layout_height="200dp"
                     android:gravity="top|start"
