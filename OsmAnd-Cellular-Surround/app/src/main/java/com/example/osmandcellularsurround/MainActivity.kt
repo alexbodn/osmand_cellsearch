@@ -132,10 +132,10 @@ class MainActivity : AppCompatActivity() {
         binding.etApiKey.setText(savedKey)
         val savedSql = sharedPrefs.getString(KEY_SQL, "")
         if (!savedSql.isNullOrEmpty()) {
-            binding.etTowersSql.setText(savedSql)
-        } else if (binding.etTowersSql.text.toString().isEmpty()) {
+            binding.etSql.setText(savedSql)
+        } else if (binding.etSql.text.toString().isEmpty()) {
             // Set default SQL if empty and no saved SQL
-            binding.etTowersSql.setText("SELECT * FROM cell_towers WHERE case when :minLat is not null then lat BETWEEN :minLat AND :maxLat AND lon BETWEEN :minLon AND :maxLon else lac=:lac end")
+            binding.etSql.setText("SELECT lat, lon, mcc || '-' || mnc || '-' || lac || '-' || cid AS `desc` FROM cell_towers WHERE case when :minLat is not null then lat BETWEEN :minLat AND :maxLat AND lon BETWEEN :minLon AND :maxLon else lac=:lac end")
         }
 
         val savedRadius = sharedPrefs.getInt(KEY_RADIUS, 0)
@@ -266,14 +266,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnRunSql.setOnClickListener {
-            val sql = binding.etTowersSql.text.toString().trim()
+            val sql = binding.etSql.text.toString().trim()
             if (sql.isNotEmpty()) {
                 runSql(sql)
             }
         }
 
         binding.btnSaveSql.setOnClickListener {
-            val sql = binding.etTowersSql.text.toString().trim()
+            val sql = binding.etSql.text.toString().trim()
             sharedPrefs.edit().putString(KEY_SQL, sql).apply()
             Toast.makeText(this, "SQL Saved", Toast.LENGTH_SHORT).show()
         }
@@ -283,7 +283,7 @@ class MainActivity : AppCompatActivity() {
                 try {
                     contentResolver.openInputStream(it)?.use { inputStream ->
                         val text = inputStream.bufferedReader().use { reader -> reader.readText() }
-                        binding.etTowersSql.setText(text)
+                        binding.etSql.setText(text)
                     }
                 } catch (e: Exception) {
                     Toast.makeText(this, "Failed to read file: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -538,7 +538,7 @@ class MainActivity : AppCompatActivity() {
                 currentMaxLon = boundingBox[3]
             }
 
-            val sqlEditorContent = binding.etTowersSql.text.toString().trim()
+            val sqlEditorContent = binding.etSql.text.toString().trim()
             val surroundingTowers: List<com.example.osmandcellularsurround.db.CellTowerResult> = if (sqlEditorContent.isNotEmpty()) {
                 var finalSql = buildParameterizedSql(sqlEditorContent)
                 if (!finalSql.contains("ORDER BY", ignoreCase = true)) {
