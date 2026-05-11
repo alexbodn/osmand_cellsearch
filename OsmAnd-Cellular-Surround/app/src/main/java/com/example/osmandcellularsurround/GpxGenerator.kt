@@ -52,7 +52,7 @@ object GpxGenerator {
 
         for ((location, towersAtLocation) in sortedGroups) {
             val hasMainTower = mainTower != null && location.first == mainTower.lat && location.second == mainTower.lon && towersAtLocation.any { it.desc == "${mainTower.mcc}-${mainTower.mnc}-${mainTower.lac}-${mainTower.cid}" }
-            val descStr = towersAtLocation.mapNotNull { it.desc }.joinToString("\n")
+            val descStr = towersAtLocation.mapNotNull { it.desc }.distinct().joinToString("\n")
 
             val type = if (hasMainTower) "main_tower" else "surrounding_tower"
             val color = if (hasMainTower) "#00FF00" else "#0000FF"

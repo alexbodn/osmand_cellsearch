@@ -101,6 +101,17 @@ class MainActivity : AppCompatActivity() {
         binding.tvUserProfileLink.text = HtmlCompat.fromHtml("<a href=\"https://opencellid.org\">View your OpenCelliD Profile &amp; History</a>", HtmlCompat.FROM_HTML_MODE_COMPACT)
         binding.tvUserProfileLink.movementMethod = LinkMovementMethod.getInstance()
 
+
+
+        binding.btnOsmAndPlugins.setOnClickListener {
+            val launchIntent = packageManager.getLaunchIntentForPackage("net.osmand.plus")
+                ?: packageManager.getLaunchIntentForPackage("net.osmand")
+            if (launchIntent != null) {
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                startActivity(launchIntent)
+            }
+        }
+
         binding.tvCredit.text = HtmlCompat.fromHtml(getString(R.string.opencellid_attribution), HtmlCompat.FROM_HTML_MODE_COMPACT)
         binding.tvCredit.movementMethod = LinkMovementMethod.getInstance()
 
@@ -750,12 +761,31 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 withContext(Dispatchers.Main) {
-                    osmandHelper.showSurroundings(gpxUri, mapCenterLat, mapCenterLon, zoomLevel) { logMsg ->
+                    val showSuccess = osmandHelper.showSurroundings(gpxUri, mapCenterLat, mapCenterLon, zoomLevel) { logMsg ->
                         appendLog(logMsg)
                     }
-                    val msgDone = "Done. Check OsmAnd."
-                    appendLog(msgDone)
-                    Toast.makeText(this@MainActivity, msgDone, Toast.LENGTH_SHORT).show()
+                    if (showSuccess) {
+                        val msgDone = "Done. Check OsmAnd."
+                        appendLog(msgDone)
+                        Toast.makeText(this@MainActivity, msgDone, Toast.LENGTH_SHORT).show()
+                    } else {
+                        val msgNoConn = "OsmAnd is installed but Cellular Surround plugin is not enabled."
+                        appendLog(msgNoConn)
+                        android.app.AlertDialog.Builder(this@MainActivity)
+                            .setTitle("Plugin Not Enabled")
+                            .setMessage("Please ensure the OsmAnd Cellular Surround plugin is enabled in OsmAnd's plugin menu.")
+                            .setPositiveButton("Open Settings") { _, _ ->
+                                val launchIntent = packageManager.getLaunchIntentForPackage("net.osmand.plus")
+                                    ?: packageManager.getLaunchIntentForPackage("net.osmand")
+                                if (launchIntent != null) {
+                                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                    startActivity(launchIntent)
+                                }
+                            }
+                            .setNegativeButton("Cancel", null)
+                            .show()
+                        binding.btnScan.text = "ENABLE PLUGIN"
+                    }
                 }
             } else {
                 withContext(Dispatchers.Main) {
