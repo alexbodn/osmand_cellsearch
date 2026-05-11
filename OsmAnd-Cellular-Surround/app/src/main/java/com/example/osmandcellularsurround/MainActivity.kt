@@ -203,16 +203,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnScan.setOnClickListener {
-            if (binding.btnScan.text.toString().equals("ENABLE PLUGIN", ignoreCase = true)) {
-                val launchIntent = packageManager.getLaunchIntentForPackage("net.osmand.plus")
-                    ?: packageManager.getLaunchIntentForPackage("net.osmand")
-                if (launchIntent != null) {
-                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                    startActivity(launchIntent)
-                }
-                return@setOnClickListener
-            }
-
             if (binding.etApiKey.text.toString().trim().isEmpty()) {
                 Toast.makeText(this, "Please enter and save an API Key first", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
@@ -410,14 +400,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
 
         lifecycleScope.launch {
-            val connected = osmandHelper.connect()
-            withContext(Dispatchers.Main) {
-                if (connected) {
-                    binding.btnScan.text = "SHOW ON MAP"
-                } else {
-                    binding.btnScan.text = "ENABLE PLUGIN"
-                }
-            }
+            osmandHelper.connect()
         }
 
         if (hasPermissions()) {
@@ -784,7 +767,7 @@ class MainActivity : AppCompatActivity() {
                             }
                             .setNegativeButton("Cancel", null)
                             .show()
-                        binding.btnScan.text = "ENABLE PLUGIN"
+                        // Retain normal text
                     }
                 }
             } else {
@@ -793,7 +776,7 @@ class MainActivity : AppCompatActivity() {
                     appendLog(msgNoConn)
                     Toast.makeText(this@MainActivity, msgNoConn, Toast.LENGTH_LONG).show()
 
-                    binding.btnScan.text = "ENABLE PLUGIN"
+                    // Retain normal text
                 }
             }
 

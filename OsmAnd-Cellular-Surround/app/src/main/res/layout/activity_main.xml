@@ -311,7 +311,7 @@
                         android:id="@+id/btnDefaultTowersSql"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Default" />
+                        android:text="Reload" />
 
                     <Button
                         android:id="@+id/btnSaveTowersSql"
