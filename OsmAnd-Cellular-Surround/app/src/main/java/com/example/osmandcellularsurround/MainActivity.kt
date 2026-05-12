@@ -159,7 +159,7 @@ class MainActivity : AppCompatActivity() {
         val savedKey = sharedPrefs.getString(KEY_API_KEY, "")
         binding.etApiKey.setText(savedKey)
 
-        val defaultTowersSql = "SELECT lat, lon, mcc || '-' || mnc || '-' || lac || '-' || cid AS desc FROM cell_towers"
+        val defaultTowersSql = "SELECT lat, lon, mcc || '-' || mnc || '-' || lac || '-' || cid AS desc FROM cell_towers WHERE lat BETWEEN :minLat AND :maxLat AND lon BETWEEN :minLon AND :maxLon"
 
         // Load Towers SQL, migrating from old KEY_SQL if KEY_TOWERS_SQL is missing
         val oldSavedSql = sharedPrefs.getString(KEY_SQL, "")
@@ -418,21 +418,17 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        binding.etTowersSql.setOnTouchListener { view, event ->
-            view.parent.requestDisallowInterceptTouchEvent(true)
-            if ((event.action and android.view.MotionEvent.ACTION_MASK) == android.view.MotionEvent.ACTION_UP) {
-                view.parent.requestDisallowInterceptTouchEvent(false)
+        val touchListener = android.view.View.OnTouchListener { view, event ->
+            if (view.canScrollVertically(1) || view.canScrollVertically(-1)) {
+                view.parent.requestDisallowInterceptTouchEvent(true)
+                if ((event.action and android.view.MotionEvent.ACTION_MASK) == android.view.MotionEvent.ACTION_UP) {
+                    view.parent.requestDisallowInterceptTouchEvent(false)
+                }
             }
             false
         }
-
-        binding.etSql.setOnTouchListener { view, event ->
-            view.parent.requestDisallowInterceptTouchEvent(true)
-            if ((event.action and android.view.MotionEvent.ACTION_MASK) == android.view.MotionEvent.ACTION_UP) {
-                view.parent.requestDisallowInterceptTouchEvent(false)
-            }
-            false
-        }
+        binding.etTowersSql.setOnTouchListener(touchListener)
+        binding.etSql.setOnTouchListener(touchListener)
 
         binding.btnSaveFile.setOnClickListener {
             saveFileLauncher.launch("query.sql")
@@ -804,17 +800,26 @@ class MainActivity : AppCompatActivity() {
                         appendLog(msgDone)
                         Toast.makeText(this@MainActivity, msgDone, Toast.LENGTH_SHORT).show()
                     } else {
-                        val msgNoConn = "OsmAnd is installed but Cellular Surround plugin is not enabled."
+                        val msgNoConn = "Failed to show on map. Please ensure OsmAnd is installed and the Cellular Surround plugin is enabled."
                         appendLog(msgNoConn)
                         android.app.AlertDialog.Builder(this@MainActivity)
-                            .setTitle("Plugin Not Enabled")
-                            .setMessage("Please ensure the OsmAnd Cellular Surround plugin is enabled in OsmAnd's plugin menu.")
-                            .setPositiveButton("Open Settings") { _, _ ->
+                            .setTitle("Action Required")
+                            .setMessage("Please install OsmAnd if it is not installed, and enable the Cellular Surround plugin in OsmAnd's plugin menu first.")
+                            .setPositiveButton("Open OsmAnd") { _, _ ->
                                 val launchIntent = packageManager.getLaunchIntentForPackage("net.osmand.plus")
                                     ?: packageManager.getLaunchIntentForPackage("net.osmand")
                                 if (launchIntent != null) {
                                     launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                                     startActivity(launchIntent)
+                                } else {
+                                    try {
+                                        val playStoreIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=net.osmand.plus"))
+                                        playStoreIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        startActivity(playStoreIntent)
+                                    } catch (e: Exception) {
+                                        val webIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=net.osmand.plus"))
+                                        startActivity(webIntent)
+                                    }
                                 }
                             }
                             .setNegativeButton("Cancel", null)
@@ -824,11 +829,30 @@ class MainActivity : AppCompatActivity() {
                 }
             } else {
                 withContext(Dispatchers.Main) {
-                    val msgNoConn = "Failed to connect to OsmAnd. Please install OsmAnd and enable the Cellular Surround plugin."
+                    val msgNoConn = "Failed to connect to OsmAnd."
                     appendLog(msgNoConn)
-                    Toast.makeText(this@MainActivity, msgNoConn, Toast.LENGTH_LONG).show()
-
-                    // Retain normal text
+                    android.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Action Required")
+                        .setMessage("Please install OsmAnd if it is not installed, and enable the Cellular Surround plugin in OsmAnd's plugin menu first.")
+                        .setPositiveButton("Open OsmAnd") { _, _ ->
+                            val launchIntent = packageManager.getLaunchIntentForPackage("net.osmand.plus")
+                                ?: packageManager.getLaunchIntentForPackage("net.osmand")
+                            if (launchIntent != null) {
+                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                startActivity(launchIntent)
+                            } else {
+                                try {
+                                    val playStoreIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=net.osmand.plus"))
+                                    playStoreIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    startActivity(playStoreIntent)
+                                } catch (e: Exception) {
+                                    val webIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=net.osmand.plus"))
+                                    startActivity(webIntent)
+                                }
+                            }
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
                 }
             }
 
