@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import android.view.View
 import android.text.method.LinkMovementMethod
@@ -100,6 +101,32 @@ class MainActivity : AppCompatActivity() {
         binding.tvUserProfileLink.text = HtmlCompat.fromHtml("<a href=\"https://opencellid.org\">View your OpenCelliD Profile &amp; History</a>", HtmlCompat.FROM_HTML_MODE_COMPACT)
         binding.tvUserProfileLink.movementMethod = LinkMovementMethod.getInstance()
 
+
+
+        binding.btnOsmAndPlugins.setOnClickListener {
+            val launchIntent = packageManager.getLaunchIntentForPackage("net.osmand.plus")
+                ?: packageManager.getLaunchIntentForPackage("net.osmand")
+            if (launchIntent != null) {
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                startActivity(launchIntent)
+            }
+        }
+
+        binding.tvCredit.text = HtmlCompat.fromHtml(getString(R.string.opencellid_attribution), HtmlCompat.FROM_HTML_MODE_COMPACT)
+        binding.tvCredit.movementMethod = LinkMovementMethod.getInstance()
+
+        binding.tvOsmAndCredit.text = HtmlCompat.fromHtml(getString(R.string.osmand_attribution), HtmlCompat.FROM_HTML_MODE_COMPACT)
+        binding.tvOsmAndCredit.movementMethod = LinkMovementMethod.getInstance()
+
+        binding.btnOsmAndPlugins.setOnClickListener {
+            val launchIntent = packageManager.getLaunchIntentForPackage("net.osmand.plus")
+                ?: packageManager.getLaunchIntentForPackage("net.osmand")
+            if (launchIntent != null) {
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                startActivity(launchIntent)
+            }
+        }
+
         // Setup TabLayout
         binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab?) {
@@ -132,6 +159,8 @@ class MainActivity : AppCompatActivity() {
         val savedKey = sharedPrefs.getString(KEY_API_KEY, "")
         binding.etApiKey.setText(savedKey)
 
+        val defaultTowersSql = "SELECT lat, lon, mcc || '-' || mnc || '-' || lac || '-' || cid AS desc FROM cell_towers WHERE lat BETWEEN :minLat AND :maxLat AND lon BETWEEN :minLon AND :maxLon"
+
         // Load Towers SQL, migrating from old KEY_SQL if KEY_TOWERS_SQL is missing
         val oldSavedSql = sharedPrefs.getString(KEY_SQL, "")
         val savedTowersSql = sharedPrefs.getString(KEY_TOWERS_SQL, oldSavedSql)
@@ -140,7 +169,7 @@ class MainActivity : AppCompatActivity() {
             binding.etTowersSql.setText(savedTowersSql)
         } else if (binding.etTowersSql.text.toString().isEmpty()) {
             // Set default SQL if empty and no saved SQL
-            binding.etTowersSql.setText("SELECT * FROM cell_towers WHERE case when :minLat is not null then lat BETWEEN :minLat AND :maxLat AND lon BETWEEN :minLon AND :maxLon else lac=:lac end")
+            binding.etTowersSql.setText(defaultTowersSql)
         }
 
         val savedRadius = sharedPrefs.getInt(KEY_RADIUS, 0)
@@ -277,6 +306,20 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        binding.btnDefaultTowersSql.setOnClickListener {
+            val oldSavedSqlLocal = sharedPrefs.getString(KEY_SQL, "")
+            val savedTowersSqlLocal = sharedPrefs.getString(KEY_TOWERS_SQL, oldSavedSqlLocal)
+            if (!savedTowersSqlLocal.isNullOrEmpty()) {
+                binding.etTowersSql.setText(savedTowersSqlLocal)
+            } else {
+                binding.etTowersSql.setText(defaultTowersSql)
+            }
+        }
+
+        binding.btnBaseTowersSql.setOnClickListener {
+            binding.etTowersSql.setText(defaultTowersSql)
+        }
+
         binding.btnSaveTowersSql.setOnClickListener {
             val sql = binding.etTowersSql.text.toString().trim()
             sharedPrefs.edit().putString(KEY_TOWERS_SQL, sql).apply()
@@ -309,21 +352,99 @@ class MainActivity : AppCompatActivity() {
             uri?.let {
                 lifecycleScope.launch {
                     try {
+                        appendSqlResult("--- Running SQL File ---", clear = true)
                         withContext(Dispatchers.IO) {
                             contentResolver.openInputStream(it)?.use { inputStream ->
-                                val text = inputStream.bufferedReader().use { reader -> reader.readText() }
-                                withContext(Dispatchers.Main) {
-                                    runSql(text)
+                                inputStream.bufferedReader().useLines { lines ->
+                                    val db = AppDatabase.getDatabase(this@MainActivity).openHelper.writableDatabase
+                                    var count = 0
+                                    var currentStatement = java.lang.StringBuilder()
+                                    db.beginTransaction()
+                                    try {
+                                        for (line in lines) {
+                                            val trimmed = line.trim()
+                                            if (trimmed.isEmpty() || trimmed.startsWith("--")) continue
+                                            currentStatement.append(line).append(" ")
+                                            if (trimmed.endsWith(";")) {
+                                                db.execSQL(currentStatement.toString())
+                                                currentStatement.clear()
+                                                count++
+                                                if (count % 100 == 0) {
+                                                    withContext(Dispatchers.Main) {
+                                                        binding.tvSqlResult.text = "Executing... $count statements done."
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        db.setTransactionSuccessful()
+                                        withContext(Dispatchers.Main) {
+                                            appendSqlResult("Successfully executed $count statements from file.", clear = false)
+                                        }
+                                    } finally {
+                                        db.endTransaction()
+                                    }
                                 }
                             }
                         }
                     } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
                             Toast.makeText(this@MainActivity, "Failed to run file: ${e.message}", Toast.LENGTH_SHORT).show()
+                            appendSqlResult("SQL File Error: ${e.message}")
                         }
                     }
                 }
             }
+        }
+
+        val saveFileLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/sql")) { uri ->
+            uri?.let {
+                lifecycleScope.launch {
+                    try {
+                        withContext(Dispatchers.IO) {
+                            contentResolver.openOutputStream(it)?.use { outputStream ->
+                                val text = binding.etSql.text.toString()
+                                outputStream.write(text.toByteArray())
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(this@MainActivity, "File saved", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(this@MainActivity, "Failed to save file: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+        }
+
+        val touchListener = android.view.View.OnTouchListener { view, event ->
+            when (event.action and android.view.MotionEvent.ACTION_MASK) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    view.parent.requestDisallowInterceptTouchEvent(true)
+                }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    // if at boundaries and trying to scroll further, allow parent intercept
+                    val y = event.y
+                    if (!view.canScrollVertically(-1) && event.historySize > 0 && y > event.getHistoricalY(0)) {
+                        view.parent.requestDisallowInterceptTouchEvent(false)
+                    } else if (!view.canScrollVertically(1) && event.historySize > 0 && y < event.getHistoricalY(0)) {
+                        view.parent.requestDisallowInterceptTouchEvent(false)
+                    } else {
+                        view.parent.requestDisallowInterceptTouchEvent(true)
+                    }
+                }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    view.parent.requestDisallowInterceptTouchEvent(false)
+                }
+            }
+            false
+        }
+        binding.etTowersSql.setOnTouchListener(touchListener)
+        binding.etSql.setOnTouchListener(touchListener)
+
+        binding.btnSaveFile.setOnClickListener {
+            saveFileLauncher.launch("query.sql")
         }
 
         binding.btnOpenFile.setOnClickListener {
@@ -338,6 +459,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+
+        lifecycleScope.launch {
+            osmandHelper.connect()
+        }
+
         if (hasPermissions()) {
             val cellInfo = TelephonyHelper.getCurrentCellInfo(this)
             if (cellInfo != null) {
@@ -418,11 +544,13 @@ class MainActivity : AppCompatActivity() {
             .replace(":maxLon", currentMaxLon?.toString() ?: "null")
     }
 
-    private fun runSql(sql: String) {
+    private fun runSql(sql: String, showQuery: Boolean = binding.cbShowQuery.isChecked) {
         appendSqlResult("--- Running SQL ---", clear = true)
 
         val finalSql = buildParameterizedSql(sql)
-        appendSqlResult("Query: $finalSql")
+        if (showQuery) {
+            appendSqlResult("Query: $finalSql")
+        }
 
         lifecycleScope.launch {
             withContext(Dispatchers.IO) {
@@ -677,17 +805,68 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 withContext(Dispatchers.Main) {
-                    osmandHelper.showSurroundings(gpxUri, mapCenterLat, mapCenterLon, zoomLevel) { logMsg ->
+                    val showSuccess = osmandHelper.showSurroundings(gpxUri, mapCenterLat, mapCenterLon, zoomLevel) { logMsg ->
                         appendLog(logMsg)
                     }
-                    val msgDone = "Done. Check OsmAnd."
-                    appendLog(msgDone)
-                    Toast.makeText(this@MainActivity, msgDone, Toast.LENGTH_SHORT).show()
+                    if (showSuccess) {
+                        val msgDone = "Done. Check OsmAnd."
+                        appendLog(msgDone)
+                        Toast.makeText(this@MainActivity, msgDone, Toast.LENGTH_SHORT).show()
+                    } else {
+                        val msgNoConn = "Failed to show on map. Please ensure OsmAnd is installed and the Cellular Surround plugin is enabled."
+                        appendLog(msgNoConn)
+                        android.app.AlertDialog.Builder(this@MainActivity)
+                            .setTitle("Action Required")
+                            .setMessage("Please install OsmAnd if it is not installed, and enable the Cellular Surround plugin in OsmAnd's plugin menu first.")
+                            .setPositiveButton("Open OsmAnd") { _, _ ->
+                                val launchIntent = packageManager.getLaunchIntentForPackage("net.osmand.plus")
+                                    ?: packageManager.getLaunchIntentForPackage("net.osmand")
+                                if (launchIntent != null) {
+                                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                    startActivity(launchIntent)
+                                } else {
+                                    try {
+                                        val playStoreIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=net.osmand.plus"))
+                                        playStoreIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        startActivity(playStoreIntent)
+                                    } catch (e: Exception) {
+                                        val webIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=net.osmand.plus"))
+                                        startActivity(webIntent)
+                                    }
+                                }
+                            }
+                            .setNegativeButton("Cancel", null)
+                            .show()
+                        // Retain normal text
+                    }
                 }
             } else {
-                val msgNoConn = "Failed to connect to OsmAnd. Is it installed?"
-                appendLog(msgNoConn)
-                Toast.makeText(this@MainActivity, msgNoConn, Toast.LENGTH_LONG).show()
+                withContext(Dispatchers.Main) {
+                    val msgNoConn = "Failed to connect to OsmAnd."
+                    appendLog(msgNoConn)
+                    android.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Action Required")
+                        .setMessage("Please install OsmAnd if it is not installed, and enable the Cellular Surround plugin in OsmAnd's plugin menu first.")
+                        .setPositiveButton("Open OsmAnd") { _, _ ->
+                            val launchIntent = packageManager.getLaunchIntentForPackage("net.osmand.plus")
+                                ?: packageManager.getLaunchIntentForPackage("net.osmand")
+                            if (launchIntent != null) {
+                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                startActivity(launchIntent)
+                            } else {
+                                try {
+                                    val playStoreIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=net.osmand.plus"))
+                                    playStoreIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    startActivity(playStoreIntent)
+                                } catch (e: Exception) {
+                                    val webIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=net.osmand.plus"))
+                                    startActivity(webIntent)
+                                }
+                            }
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                }
             }
 
             binding.btnScan.isEnabled = true
