@@ -693,7 +693,7 @@ class MainActivity : AppCompatActivity() {
 
             val msgConnected = "Resolving location for $parsedRadio MCC:$parsedMcc MNC:$parsedMnc LAC:$parsedLac CID:$parsedCid..."
             appendLog(msgConnected)
-            Toast.makeText(this@MainActivity, "Resolving location...", Toast.LENGTH_SHORT).show()
+            if (binding.cbVerbose.isChecked) { Toast.makeText(this@MainActivity, "Resolving location...", Toast.LENGTH_SHORT).show() }
 
             val mainTower = dataSyncManager.ensureCellTowerExistsAndGet(
                 apiKey,
