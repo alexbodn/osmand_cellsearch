@@ -45,6 +45,7 @@ class MainActivity : AppCompatActivity() {
     private val KEY_RADIUS = "scan_radius"
     private val KEY_SQL = "saved_sql" // now legacy or used for console if needed
     private val KEY_TOWERS_SQL = "towers_sql"
+    private val KEY_VERBOSE = "verbose_mode"
 
     // To hold latest values for SQL execution
     private var currentMinLat: Double? = null
@@ -175,6 +176,12 @@ class MainActivity : AppCompatActivity() {
         val savedRadius = sharedPrefs.getInt(KEY_RADIUS, 0)
         binding.spinnerRadius.setSelection(savedRadius)
 
+        val isVerbose = sharedPrefs.getBoolean(KEY_VERBOSE, false)
+        binding.cbVerbose.isChecked = isVerbose
+        binding.cbVerbose.setOnCheckedChangeListener { _, isChecked ->
+            sharedPrefs.edit().putBoolean(KEY_VERBOSE, isChecked).apply()
+        }
+
         binding.btnSaveApiKey.setOnClickListener {
             val key = binding.etApiKey.text.toString().trim()
             val radiusPosition = binding.spinnerRadius.selectedItemPosition
@@ -203,6 +210,51 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnScan.setOnClickListener {
+            val pm = packageManager
+
+            var osmandInstalled = false
+            try {
+                pm.getPackageInfo("net.osmand", 0)
+                osmandInstalled = true
+            } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
+            }
+
+            var osmandPlusInstalled = false
+            try {
+                pm.getPackageInfo("net.osmand.plus", 0)
+                osmandPlusInstalled = true
+            } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
+            }
+
+            if (!osmandInstalled && !osmandPlusInstalled) {
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("OsmAnd Required")
+                    .setMessage("Neither OsmAnd nor OsmAnd+ is installed. Please install one of them to use this feature.")
+                    .setPositiveButton("Get OsmAnd (Free)") { _, _ ->
+                        try {
+                            val playStoreIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=net.osmand"))
+                            playStoreIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(playStoreIntent)
+                        } catch (e: Exception) {
+                            val webIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=net.osmand"))
+                            startActivity(webIntent)
+                        }
+                    }
+                    .setNeutralButton("Get OsmAnd+ (Paid)") { _, _ ->
+                         try {
+                            val playStoreIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=net.osmand.plus"))
+                            playStoreIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(playStoreIntent)
+                        } catch (e: Exception) {
+                            val webIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=net.osmand.plus"))
+                            startActivity(webIntent)
+                        }
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+                return@setOnClickListener
+            }
+
             if (binding.etApiKey.text.toString().trim().isEmpty()) {
                 Toast.makeText(this, "Please enter and save an API Key first", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
@@ -632,7 +684,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.tvStatus.text = ""
         appendLog("Status: Scanning edited cell data...")
-        Toast.makeText(this, "Scanning edited cell data...", Toast.LENGTH_SHORT).show()
+        if (binding.cbVerbose.isChecked) { Toast.makeText(this, "Scanning edited cell data...", Toast.LENGTH_SHORT).show() }
         binding.btnScan.isEnabled = false
 
         lifecycleScope.launch {
@@ -641,7 +693,7 @@ class MainActivity : AppCompatActivity() {
 
             val msgConnected = "Resolving location for $parsedRadio MCC:$parsedMcc MNC:$parsedMnc LAC:$parsedLac CID:$parsedCid..."
             appendLog(msgConnected)
-            Toast.makeText(this@MainActivity, "Resolving location...", Toast.LENGTH_SHORT).show()
+            if (binding.cbVerbose.isChecked) { Toast.makeText(this@MainActivity, "Resolving location...", Toast.LENGTH_SHORT).show() }
 
             val mainTower = dataSyncManager.ensureCellTowerExistsAndGet(
                 apiKey,
@@ -760,7 +812,7 @@ class MainActivity : AppCompatActivity() {
             if (surroundingTowers.isEmpty()) {
                 val msgNoTowers = "No towers found."
                 appendLog(msgNoTowers)
-                Toast.makeText(this@MainActivity, msgNoTowers, Toast.LENGTH_SHORT).show()
+                if (binding.cbVerbose.isChecked) { Toast.makeText(this@MainActivity, msgNoTowers, Toast.LENGTH_SHORT).show() }
                 binding.btnScan.isEnabled = true
                 return@launch
             }
@@ -811,7 +863,8 @@ class MainActivity : AppCompatActivity() {
                     if (showSuccess) {
                         val msgDone = "Done. Check OsmAnd."
                         appendLog(msgDone)
-                        Toast.makeText(this@MainActivity, msgDone, Toast.LENGTH_SHORT).show()
+                        if (binding.cbVerbose.isChecked) { Toast.makeText(this@MainActivity, msgDone, Toast.LENGTH_SHORT).show() }
+                        Unit
                     } else {
                         val msgNoConn = "Failed to show on map. Please ensure OsmAnd is installed and the Cellular Surround plugin is enabled."
                         appendLog(msgNoConn)
