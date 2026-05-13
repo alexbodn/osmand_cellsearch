@@ -203,6 +203,57 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnScan.setOnClickListener {
+            val pm = packageManager
+
+            var osmandInstalled = false
+            try {
+                pm.getPackageInfo("net.osmand", 0)
+                osmandInstalled = true
+            } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
+            }
+
+            var osmandPlusInstalled = false
+            try {
+                pm.getPackageInfo("net.osmand.plus", 0)
+                osmandPlusInstalled = true
+            } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
+            }
+
+            val osmandStatus = if (osmandInstalled) "Installed" else "Not Installed"
+            val osmandPlusStatus = if (osmandPlusInstalled) "Installed" else "Not Installed"
+
+            Toast.makeText(this, "OsmAnd is $osmandStatus", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "OsmAnd+ is $osmandPlusStatus", Toast.LENGTH_SHORT).show()
+
+            if (!osmandInstalled && !osmandPlusInstalled) {
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("OsmAnd Required")
+                    .setMessage("Neither OsmAnd nor OsmAnd+ is installed. Please install one of them to use this feature.")
+                    .setPositiveButton("Get OsmAnd (Free)") { _, _ ->
+                        try {
+                            val playStoreIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=net.osmand"))
+                            playStoreIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(playStoreIntent)
+                        } catch (e: Exception) {
+                            val webIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=net.osmand"))
+                            startActivity(webIntent)
+                        }
+                    }
+                    .setNeutralButton("Get OsmAnd+ (Paid)") { _, _ ->
+                         try {
+                            val playStoreIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=net.osmand.plus"))
+                            playStoreIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(playStoreIntent)
+                        } catch (e: Exception) {
+                            val webIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=net.osmand.plus"))
+                            startActivity(webIntent)
+                        }
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+                return@setOnClickListener
+            }
+
             if (binding.etApiKey.text.toString().trim().isEmpty()) {
                 Toast.makeText(this, "Please enter and save an API Key first", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
