@@ -45,6 +45,7 @@ class MainActivity : AppCompatActivity() {
     private val KEY_RADIUS = "scan_radius"
     private val KEY_SQL = "saved_sql" // now legacy or used for console if needed
     private val KEY_TOWERS_SQL = "towers_sql"
+    private val KEY_VERBOSE = "verbose_mode"
 
     // To hold latest values for SQL execution
     private var currentMinLat: Double? = null
@@ -174,6 +175,12 @@ class MainActivity : AppCompatActivity() {
 
         val savedRadius = sharedPrefs.getInt(KEY_RADIUS, 0)
         binding.spinnerRadius.setSelection(savedRadius)
+
+        val isVerbose = sharedPrefs.getBoolean(KEY_VERBOSE, false)
+        binding.cbVerbose.isChecked = isVerbose
+        binding.cbVerbose.setOnCheckedChangeListener { _, isChecked ->
+            sharedPrefs.edit().putBoolean(KEY_VERBOSE, isChecked).apply()
+        }
 
         binding.btnSaveApiKey.setOnClickListener {
             val key = binding.etApiKey.text.toString().trim()
@@ -677,7 +684,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.tvStatus.text = ""
         appendLog("Status: Scanning edited cell data...")
-        Toast.makeText(this, "Scanning edited cell data...", Toast.LENGTH_SHORT).show()
+        if (binding.cbVerbose.isChecked) { Toast.makeText(this, "Scanning edited cell data...", Toast.LENGTH_SHORT).show() }
         binding.btnScan.isEnabled = false
 
         lifecycleScope.launch {
@@ -805,7 +812,7 @@ class MainActivity : AppCompatActivity() {
             if (surroundingTowers.isEmpty()) {
                 val msgNoTowers = "No towers found."
                 appendLog(msgNoTowers)
-                Toast.makeText(this@MainActivity, msgNoTowers, Toast.LENGTH_SHORT).show()
+                if (binding.cbVerbose.isChecked) { Toast.makeText(this@MainActivity, msgNoTowers, Toast.LENGTH_SHORT).show() }
                 binding.btnScan.isEnabled = true
                 return@launch
             }
@@ -856,7 +863,8 @@ class MainActivity : AppCompatActivity() {
                     if (showSuccess) {
                         val msgDone = "Done. Check OsmAnd."
                         appendLog(msgDone)
-                        Toast.makeText(this@MainActivity, msgDone, Toast.LENGTH_SHORT).show()
+                        if (binding.cbVerbose.isChecked) { Toast.makeText(this@MainActivity, msgDone, Toast.LENGTH_SHORT).show() }
+                        Unit
                     } else {
                         val msgNoConn = "Failed to show on map. Please ensure OsmAnd is installed and the Cellular Surround plugin is enabled."
                         appendLog(msgNoConn)

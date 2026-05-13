@@ -247,6 +247,13 @@
                 android:layout_marginTop="16dp"
                 android:layout_marginBottom="8dp" />
 
+            <CheckBox
+                android:id="@+id/cbVerbose"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Verbose mode"
+                android:layout_marginBottom="8dp" />
+
             <TextView
                 android:id="@+id/tvCellInfoLabel"
                 android:layout_width="wrap_content"
@@ -292,9 +299,8 @@
                     android:id="@+id/etTowersSql"
                     android:layout_width="0dp"
                     android:layout_weight="1"
-                    android:layout_height="wrap_content"
+                    android:layout_height="match_parent"
                     android:minLines="3"
-                    android:maxLines="5"
                     android:scrollbars="vertical"
                     android:gravity="top|start"
                     android:inputType="textMultiLine"
