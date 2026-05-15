@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
 import com.example.osmandcellularsurround.db.CellTower
+import com.example.osmandcellularsurround.db.CellTowerResult
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -13,7 +14,7 @@ import java.util.Locale
 
 object GpxGenerator {
 
-    fun generateGpx(context: Context, mainTower: CellTower?, surroundingTowers: List<CellTower>): Uri {
+    fun generateGpx(context: Context, mainTower: CellTower?, surroundingTowers: List<CellTowerResult>): Uri {
         val fileName = "cellular_surround.gpx"
         val file = File(context.cacheDir, fileName)
 
@@ -33,31 +34,58 @@ object GpxGenerator {
         gpxStr.append("    <desc>© OpenCelliD Project is licensed under a Creative Commons Attribution-ShareAlike 4.0 International License.</desc>\n")
         gpxStr.append("  </metadata>\n")
 
-        // Main connected tower (highlighted in color)
+        // Combine all towers
+        val allTowers = mutableListOf<CellTowerResult>()
         if (mainTower != null) {
-            gpxStr.append("  <wpt lat=\"${mainTower.lat}\" lon=\"${mainTower.lon}\">\n")
-            gpxStr.append("    <time>$timeString</time>\n")
-            gpxStr.append("    <desc>${mainTower.mcc}-${mainTower.mnc}-${mainTower.lac}-${mainTower.cid}</desc>\n")
-            gpxStr.append("    <type>main_tower</type>\n")
-            gpxStr.append("    <extensions>\n")
-            gpxStr.append("      <osmand:color>#00FF00</osmand:color>\n")
-            gpxStr.append("    </extensions>\n")
-            gpxStr.append("  </wpt>\n")
+            val mainDesc = "${mainTower.mcc}-${mainTower.mnc}-${mainTower.lac}-${mainTower.cid}"
+            allTowers.add(CellTowerResult(mainTower.lat, mainTower.lon, mainDesc))
         }
-
-        // Surrounding towers
         for (tower in surroundingTowers) {
-            // Don't duplicate the main tower if it exists
-            if (mainTower != null && tower.mcc == mainTower.mcc && tower.mnc == mainTower.mnc && tower.cid == mainTower.cid) continue
-
-            gpxStr.append("  <wpt lat=\"${tower.lat}\" lon=\"${tower.lon}\">\n")
-            gpxStr.append("    <desc>${tower.mcc}-${tower.mnc}-${tower.lac}-${tower.cid}</desc>\n")
-            gpxStr.append("    <type>surrounding_tower</type>\n")
-            gpxStr.append("    <extensions>\n")
-            gpxStr.append("      <osmand:color>#0000FF</osmand:color>\n")
-            gpxStr.append("    </extensions>\n")
-            gpxStr.append("  </wpt>\n")
+            if (mainTower != null && tower.lat == mainTower.lat && tower.lon == mainTower.lon && tower.desc == "${mainTower.mcc}-${mainTower.mnc}-${mainTower.lac}-${mainTower.cid}") continue
+            allTowers.add(tower)
         }
+
+        var currentLat: Double? = null
+        var currentLon: Double? = null
+        val currentDescs = mutableListOf<String>()
+        var currentHasMain = false
+
+        fun appendGroup() {
+            if (currentLat != null && currentLon != null) {
+                val descStr = currentDescs.distinct().joinToString("\n")
+                val type = if (currentHasMain) "main_tower" else "surrounding_tower"
+                val color = if (currentHasMain) "#00FF00" else "#0000FF"
+
+                gpxStr.append("  <wpt lat=\"${currentLat}\" lon=\"${currentLon}\">\n")
+                if (currentHasMain) {
+                    gpxStr.append("    <time>$timeString</time>\n")
+                }
+                gpxStr.append("    <desc>$descStr</desc>\n")
+                gpxStr.append("    <type>$type</type>\n")
+                gpxStr.append("    <extensions>\n")
+                gpxStr.append("      <osmand:color>$color</osmand:color>\n")
+                gpxStr.append("    </extensions>\n")
+                gpxStr.append("  </wpt>\n")
+            }
+        }
+
+        for (tower in allTowers) {
+            if (currentLat == tower.lat && currentLon == tower.lon) {
+                tower.desc?.let { currentDescs.add(it) }
+                if (mainTower != null && tower.desc == "${mainTower.mcc}-${mainTower.mnc}-${mainTower.lac}-${mainTower.cid}") {
+                    currentHasMain = true
+                }
+            } else {
+                appendGroup()
+
+                currentLat = tower.lat
+                currentLon = tower.lon
+                currentDescs.clear()
+                tower.desc?.let { currentDescs.add(it) }
+                currentHasMain = (mainTower != null && tower.lat == mainTower.lat && tower.lon == mainTower.lon && tower.desc == "${mainTower.mcc}-${mainTower.mnc}-${mainTower.lac}-${mainTower.cid}")
+            }
+        }
+        appendGroup()
 
         gpxStr.append("  <extensions>\n")
         gpxStr.append("    <osmand:show_start_finish>false</osmand:show_start_finish>\n")

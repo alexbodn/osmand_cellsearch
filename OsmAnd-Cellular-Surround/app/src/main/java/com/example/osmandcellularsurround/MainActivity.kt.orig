@@ -282,21 +282,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        binding.btnClear.setOnClickListener {
-            lifecycleScope.launch {
-                val isConnected = osmandHelper.connect()
-                if (isConnected) {
-                    osmandHelper.hideSurroundings { msg ->
-                        lifecycleScope.launch(Dispatchers.Main) {
-                            appendLog(msg)
-                        }
-                    }
-                } else {
-                    appendLog("Failed to connect to OsmAnd for clearing.")
-                }
-            }
-        }
-
         binding.btnCopyLog.setOnClickListener {
             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val isSqlTab = binding.tabLayout.selectedTabPosition == 1
@@ -768,7 +753,9 @@ class MainActivity : AppCompatActivity() {
                             appendLog("GNSS location acquired.")
                         } else {
                             withContext(Dispatchers.Main) { Toast.makeText(this@MainActivity, "Failed to get reliable GNSS location.", Toast.LENGTH_SHORT).show() }
-                            appendLog("Status: Failed to acquire GNSS location within 5 seconds. Falling back to cell location.")
+                            appendLog("Status: Failed to acquire GNSS location within 5 seconds.")
+                            withContext(Dispatchers.Main) { binding.btnScan.isEnabled = true }
+                            return@launch
                         }
                     }
                 } catch (e: SecurityException) {

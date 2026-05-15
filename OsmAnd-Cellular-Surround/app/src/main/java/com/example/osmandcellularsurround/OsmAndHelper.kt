@@ -69,10 +69,10 @@ class OsmAndHelper(private val context: Context) {
         connection = null
     }
 
-    suspend fun showSurroundings(gpxUri: Uri, lat: Double, lon: Double, zoom: Int, logger: (String) -> Unit) {
-        val aidl = osmandService ?: return
+    suspend fun showSurroundings(gpxUri: Uri, lat: Double, lon: Double, zoom: Int, logger: (String) -> Unit): Boolean {
+        val aidl = osmandService ?: return false
 
-        withContext(Dispatchers.IO) {
+        return withContext(Dispatchers.IO) {
             try {
                 // Remove the old GPX track to force an update
                 val removeParams = RemoveGpxParams("cellular_surround.gpx")
@@ -84,12 +84,15 @@ class OsmAndHelper(private val context: Context) {
                 val importSuccess = aidl.importGpx(importParams)
                 logger("OsmAndHelper: Imported new GPX: $importSuccess")
 
+                if (!importSuccess) return@withContext false
+
                 if (importSuccess) {
                     val showParams = ShowGpxParams("cellular_surround.gpx")
                     // Show might need the relative path / cache path depending on OsmAnd version.
                     // In AIDL it looks up by the name.
                     val showSuccess = aidl.showGpx(showParams)
                     logger("OsmAndHelper: Showed GPX: $showSuccess")
+                    if (!showSuccess) return@withContext false
                 }
 
                 val packageManager = context.packageManager
@@ -107,9 +110,11 @@ class OsmAndHelper(private val context: Context) {
                 val locationParams = SetMapLocationParams(lat, lon, zoom, 0f, true)
                 val locSuccess = aidl.setMapLocation(locationParams)
                 logger("OsmAndHelper: Set Map Location: $locSuccess")
+                return@withContext true
             } catch (e: Exception) {
                 logger("OsmAndHelper: Exception during AIDL communication: ${e.message}")
                 e.printStackTrace()
+                return@withContext false
             }
         }
     }
