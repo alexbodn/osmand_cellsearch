@@ -558,18 +558,37 @@ class MainActivity : AppCompatActivity() {
         if (intent.action == Intent.ACTION_SEND && "text/plain" == intent.type) {
             val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
             if (sharedText != null) {
-                // Try to parse typical OsmAnd geo share URLs (e.g., https://osmand.net/go?lat=...&lon=...)
-                try {
-                    val uri = android.net.Uri.parse(sharedText)
-                    if (uri != null && uri.isHierarchical) {
-                        val lat = uri.getQueryParameter("lat")
-                        val lon = uri.getQueryParameter("lon")
-                        if (lat != null && lon != null) {
-                            latLonStr = "$lat, $lon"
+                // Try to parse from typical OsmAnd multi-line share text
+                // Format example: Location: geo:31.95398,34.80711?z=15...
+                val geoRegex = Regex("""geo:([-+]?[0-9]*\.?[0-9]+),([-+]?[0-9]*\.?[0-9]+)""")
+                val geoMatch = geoRegex.find(sharedText)
+                if (geoMatch != null) {
+                    val lat = geoMatch.groupValues[1]
+                    val lon = geoMatch.groupValues[2]
+                    latLonStr = "$lat, $lon"
+                } else {
+                    // Try to parse pin URL (e.g., https://osmand.net/map?pin=31.95398,34.80711)
+                    val pinRegex = Regex("""pin=([-+]?[0-9]*\.?[0-9]+),([-+]?[0-9]*\.?[0-9]+)""")
+                    val pinMatch = pinRegex.find(sharedText)
+                    if (pinMatch != null) {
+                        val lat = pinMatch.groupValues[1]
+                        val lon = pinMatch.groupValues[2]
+                        latLonStr = "$lat, $lon"
+                    } else {
+                        // Fallback parsing for legacy osmand.net/go?lat=...&lon=... (if single line URL)
+                        try {
+                            val uri = android.net.Uri.parse(sharedText)
+                            if (uri != null && uri.isHierarchical) {
+                                val lat = uri.getQueryParameter("lat")
+                                val lon = uri.getQueryParameter("lon")
+                                if (lat != null && lon != null) {
+                                    latLonStr = "$lat, $lon"
+                                }
+                            }
+                        } catch (e: Exception) {
+                            // Ignore unsupported URI formats from plain text shares
                         }
                     }
-                } catch (e: Exception) {
-                    // Ignore unsupported URI formats from plain text shares
                 }
             }
         } else if (intent.action == Intent.ACTION_VIEW && intent.data != null) {
