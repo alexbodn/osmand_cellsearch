@@ -611,6 +611,7 @@ class MainActivity : AppCompatActivity() {
             lifecycleScope.launch(Dispatchers.Main) {
                 binding.etManualLocation.setText(latLonStr)
                 binding.cbManualLocation.isChecked = true
+                binding.cbLocateGnss.isChecked = true
                 binding.tabLayout.getTabAt(1)?.select() // Switch to CONFIG tab
             }
         }
